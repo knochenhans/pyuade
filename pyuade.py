@@ -281,9 +281,6 @@ class Uade(object):
         # total = np.zeros(4096 * 1024, dtype=c_int16)
 
     def play(self):
-        #running = True
-
-        # while running:
         nbytes = self.libuade.uade_read(self.buf, self.buf_len, self.state)
 
         # pa = cast(buf, POINTER(c_char * buf_len))
