@@ -1,7 +1,12 @@
+import sys
+import time
 from ctypes import *
 import numpy as np
 import sounddevice as sd
 import soundfile as sf
+from PySide6 import QtCore, QtWidgets, QtGui
+from PySide6.QtCore import QThread
+import debugpy
 
 PATH_MAX = 4096
 UADE_MAX_MESSAGE_SIZE = 8 + 4096
@@ -174,149 +179,235 @@ ao_device._fields_ = [
 ]
 
 
-def main():
-    libc = CDLL("/usr/lib/libc.so.6")
-    CDLL("/usr/lib/libbencodetools.so", mode=RTLD_GLOBAL)
-    libuade = CDLL("/usr/lib/libuade.so", mode=RTLD_GLOBAL)
-    libao = CDLL("/usr/lib/libao.so.4")
+class Uade(object):
+    def __init__(self, *args):
+        self.libc = CDLL("/usr/lib/libc.so.6")
 
-    libuade.uade_new_state.argtypes = [c_void_p]
-    libuade.uade_new_state.restype = c_void_p
+        self.libc.free.argtypes = [c_void_p]
 
-    state = libuade.uade_new_state(None)
+        CDLL("/usr/lib/libbencodetools.so", mode=RTLD_GLOBAL)
+        self.libuade = CDLL("/usr/lib/libuade.so", mode=RTLD_GLOBAL)
+        self.libao = CDLL("/usr/lib/libao.so.4")
 
-    if not state:
-        print("uade_state is NULL")
+        self.libuade.uade_new_state.argtypes = [c_void_p]
+        self.libuade.uade_new_state.restype = c_void_p
 
-    # libuade.uade_set_debug.argtypes = [c_void_p]
-    # libuade.uade_set_debug(state)
+        self.libuade.uade_read_file.argtypes = [POINTER(c_size_t), c_char_p]
+        self.libuade.uade_read_file.restype = c_void_p
 
-    libuade.uade_read_file.argtypes = [POINTER(c_size_t), c_char_p]
-    libuade.uade_read_file.restype = c_void_p
+        self.libuade.uade_get_sampling_rate.argtypes = [c_void_p]
+        self.libuade.uade_get_sampling_rate.restype = c_int
 
-    libuade.uade_get_sampling_rate.argtypes = [c_void_p]
-    libuade.uade_get_sampling_rate.restype = c_int
+        self.libuade.uade_play.argtypes = [c_char_p, c_int, c_void_p]
+        self.libuade.uade_play.restype = c_int
 
-    # libuade.audio_init.argtypes = [c_int]
-    # libuade.audio_init.restype = c_int
+        self.libuade.uade_get_song_info.argtypes = [c_void_p]
+        self.libuade.uade_get_song_info.restype = POINTER(uade_song_info)
 
-    samplerate = libuade.uade_get_sampling_rate(state)
+        self.libuade.uade_read_notification.argtypes = [c_void_p, c_void_p]
 
-    size = c_size_t()
-    buf = c_void_p()
+        self.libuade.uade_read.argtypes = [c_void_p, c_size_t, c_void_p]
+        self.libuade.uade_read.restype = c_ssize_t
 
-    fname = "/home/andre/Musik/Retro/Games/the lost vikings 1.mod"
+        self.libuade.uade_stop.argtypes = [c_void_p]
 
-    buf = libuade.uade_read_file(
-        byref(size), str.encode(fname))
+        self.libuade.uade_cleanup_state.argtypes = [c_void_p]
 
-    if not buf:
-        print("Can not read file", fname)
+        self.libao.ao_open_live.argtypes = [c_int, c_void_p, c_void_p]
+        self.libao.ao_open_live.restype = c_void_p
 
-    # libuade.uade_play_from_buffer.argtypes = [
-    #     c_char_p, c_void_p, c_size_t, c_int, c_void_p]
-    # libuade.uade_play_from_buffer.restype = c_int
-    # ret = libuade.uade_play_from_buffer(None, buf, size, -1, state)
+        self.libao.ao_close.argtypes = [c_void_p]
+        self.libao.ao_play.argtypes = [c_void_p, c_char_p, c_uint32]
 
-    libuade.uade_play.argtypes = [c_char_p, c_int, c_void_p]
-    libuade.uade_play.restype = c_int
-    ret = libuade.uade_play(str.encode(fname), -1, state)
+        self.libao.ao_initialize()
 
-    if ret < 0:
-        print("uade_play_from_buffer: error")
-    elif ret == 0:
-        print("Can not play", fname)
+    def load_song(self):
+        size = c_size_t()
+        buf = c_void_p()
 
-    libc.free.argtypes = [c_void_p]
-    libc.free(buf)
+        fname = "/home/andre/Musik/Retro/Games/the lost vikings 1.mod"
 
-    libuade.uade_get_song_info.argtypes = [c_void_p]
-    libuade.uade_get_song_info.restype = POINTER(uade_song_info)
+        buf = self.libuade.uade_read_file(
+            byref(size), str.encode(fname))
 
-    info = libuade.uade_get_song_info(state).contents
+        if not buf:
+            print("Can not read file", fname)
 
-    if info.formatname:
-        print("Format name:", info.formatname.decode())
-    if info.modulename:
-        print("Module name:", info.modulename.decode())
-    if info.playername:
-        print("Player name:", info.playername.decode())
+        ret = self.libuade.uade_play(str.encode(fname), -1, self.state)
 
-    print(
-        f"subsongs: cur {info.subsongs.cur} min {info.subsongs.min} max {info.subsongs.max}")
+        if ret < 0:
+            print("uade_play_from_buffer: error")
+        elif ret == 0:
+            print("Can not play", fname)
 
-    libuade.uade_read_notification.argtypes = [c_void_p, c_void_p]
+        self.libc.free(buf)
 
-    libuade.uade_read.argtypes = [c_void_p, c_size_t, c_void_p]
-    libuade.uade_read.restype = c_ssize_t
+        info = self.libuade.uade_get_song_info(self.state).contents
 
-    libao.ao_initialize()
+        if info.formatname:
+            print("Format name:", info.formatname.decode())
+        if info.modulename:
+            print("Module name:", info.modulename.decode())
+        if info.playername:
+            print("Player name:", info.playername.decode())
 
-    format = ao_sample_format(
-        2 * 8, libuade.uade_get_sampling_rate(state), 2, 4)
+        print(
+            f"subsongs: cur {info.subsongs.cur} min {info.subsongs.min} max {info.subsongs.max}")
 
-    driver = libao.ao_default_driver_id()
+    def init_play(self):
+        print("Start playing")
 
-    libao.ao_open_live.argtypes = [c_int, c_void_p, c_void_p]
-    libao.ao_open_live.restype = c_void_p
+        self.state = self.libuade.uade_new_state(None)
 
-    libao_device = libao.ao_open_live(driver, byref(format), None)
+        if not self.state:
+            print("uade_state is NULL")
 
-    buf_len = 4096
-    buf = (c_char * buf_len)()
+        samplerate = self.libuade.uade_get_sampling_rate(self.state)
 
-    total = np.array([])
-    #total = np.zeros(4096 * 1024, dtype=c_int16)
+        self.load_song()
 
-    running = True
+        format = ao_sample_format(
+            2 * 8, self.libuade.uade_get_sampling_rate(self.state), 2, 4)
 
-    while running:
-        nbytes = libuade.uade_read(buf, buf_len, state)
+        driver = self.libao.ao_default_driver_id()
+
+        self.libao_device = self.libao.ao_open_live(
+            driver, byref(format), None)
+
+        self.buf_len = 4096
+        self.buf = (c_char * self.buf_len)()
+
+        total = np.array([])
+        # total = np.zeros(4096 * 1024, dtype=c_int16)
+
+    def play(self):
+        #running = True
+
+        # while running:
+        nbytes = self.libuade.uade_read(self.buf, self.buf_len, self.state)
 
         # pa = cast(buf, POINTER(c_char * buf_len))
         # a = np.frombuffer(pa.contents, dtype=np.int16)
 
         if nbytes < 0:
             print("Playback error.")
-            running = False
+            return False
         elif nbytes == 0:
             print("Song end.")
-            running = False
-
-        libao.ao_play.argtypes = [c_void_p, c_char_p, c_uint32]
+            return False
 
         # total = np.append(total, a)
 
-        play = libao.ao_play(libao_device, buf, nbytes)
+        if not self.libao.ao_play(self.libao_device, self.buf, nbytes):
+            return False
 
-    # cast(buf2, POINTER(c_char))
+        return True
 
-    # sd.play(total, 44100)
-    # sd.wait()
+        # cast(buf2, POINTER(c_char))
 
-    # for x in range(100):
+        # sd.play(total, 44100)
+        # sd.wait()
 
-    #     pa = cast(buf2, POINTER(c_char * 4096))
-    #     a = np.frombuffer(pa.contents, dtype=np.int16)
+        # for x in range(100):
+
+        #     pa = cast(buf2, POINTER(c_char * 4096))
+        #     a = np.frombuffer(pa.contents, dtype=np.int16)
 
         # if x >= 6:
         #     for i in range(16):
         #         print(a[i], " - ", format(a[i], '#016b'))
         # total = np.append(total, a)
-        
-    # def callback(outdata, frames, time, status):
-    #     data = wf.buffer_read(frames, dtype='float32')
-    #     if len(data) <= 0:
-    #         raise sd.CallbackAbort
-    #     if len(outdata) > len(data):
-    #         raise sd.CallbackAbort  # wrong obviously
-    #     outdata[:] = data
 
-    # with sd.RawOutputStream(channels=wf.channels,
-    #                         callback=callback) as stream:
-    #     while stream.active:
-    #         continue
+        # def callback(outdata, frames, time, status):
+        #     data = wf.buffer_read(frames, dtype='float32')
+        #     if len(data) <= 0:
+        #         raise sd.CallbackAbort
+        #     if len(outdata) > len(data):
+        #         raise sd.CallbackAbort  # wrong obviously
+        #     outdata[:] = data
+
+        # with sd.RawOutputStream(channels=wf.channels,
+        #                         callback=callback) as stream:
+        #     while stream.active:
+        #         continue
+    def stop(self):
+        print("Stop playing")
+
+        if self.libuade.uade_stop(self.state) != 0:
+            print("uade_stop error")
+
+        self.libuade.uade_cleanup_state(self.state)
+
+        if self.libao.ao_close(self.libao_device) != 1:
+            print("ao_close error")
+
+        self.state = 0
+
+
+class MyThread(QThread):
+    def __init__(self, parent=None):
+        QThread.__init__(self, parent)
+        self.running = True
+
+    def run(self):
+        debugpy.debug_this_thread()
+        self.uade.init_play()
+
+        while self.running:
+            # sys.stdout.write('.')
+            # sys.stdout.flush()
+            # time.sleep(1)
+            if not self.uade.play():
+                self.running = False
+
+        self.uade.stop()
+
+
+class MyWidget(QtWidgets.QWidget):
+    def __init__(self):
+        super().__init__()
+
+        self.play_btn = QtWidgets.QPushButton("Play")
+        self.stop_btn = QtWidgets.QPushButton("Stop")
+        self.text = QtWidgets.QLabel("Hello World",
+                                     alignment=QtCore.Qt.AlignCenter)
+
+        layout = QtWidgets.QVBoxLayout()
+        layout.addWidget(self.text)
+
+        h_layout = QtWidgets.QHBoxLayout()
+        h_layout.addWidget(self.play_btn)
+        h_layout.addWidget(self.stop_btn)
+
+        layout.addLayout(h_layout)
+        self.setLayout(layout)
+
+        self.play_btn.clicked.connect(self.play)
+        self.stop_btn.clicked.connect(self.stop)
+
+        self.uade = Uade()
+
+        self.thread = MyThread()
+
+    @QtCore.Slot()
+    def play(self):
+        # self.uade.play()
+        self.thread.uade = self.uade
+        self.thread.start()
+        self.thread.running = True
+
+    @QtCore.Slot()
+    def stop(self):
+        self.thread.running = False
+        self.thread.quit()
+        # self.thread.wait()
 
 
 if __name__ == "__main__":
-    main()
+    app = QtWidgets.QApplication([])
+
+    widget = MyWidget()
+    widget.resize(800, 600)
+    widget.show()
+
+    sys.exit(app.exec())
