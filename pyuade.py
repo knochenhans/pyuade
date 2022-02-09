@@ -277,7 +277,7 @@ class Uade(object):
         self.buf_len = 4096
         self.buf = (c_char * self.buf_len)()
 
-        total = np.array([])
+        # total = np.array([])
         # total = np.zeros(4096 * 1024, dtype=c_int16)
 
     def play(self):
