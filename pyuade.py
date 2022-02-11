@@ -1,4 +1,8 @@
+from ast import For
+from genericpath import exists
 from logging import exception
+import pathlib
+from pyexpat import model
 import sys
 import time
 import ntpath
@@ -6,12 +10,16 @@ import numpy as np
 import sounddevice as sd
 import soundfile as sf
 from PySide6 import QtCore, QtWidgets
-from PySide6.QtCore import QThread, QAbstractItemModel, QModelIndex, QItemSelectionModel
+from PySide6.QtCore import QSettings, QThread, QAbstractItemModel, QModelIndex, QItemSelectionModel
 from PySide6.QtWidgets import QFileDialog, QListWidgetItem, QTreeView
 from PySide6.QtGui import QStandardItem, QStandardItemModel
 import debugpy
 from uaddef import *
 from externallibs import *
+import configparser
+import json
+from appdirs import *
+from pathlib import Path
 
 
 class Subsong():
@@ -203,6 +211,44 @@ class MyWidget(QtWidgets.QWidget):
         self.build_gui()
 
         self.thread = MyThread()
+        # self.settings = QSettings("Andre Jonas", "pyuade")
+        self.appname = "pyuade"
+        self.appauthor = "Andre Jonas"
+
+        self.config = configparser.ConfigParser()
+        if self.config.read(user_config_dir(self.appname) + '/config.ini'):
+            self.resize(int(self.config["window"]["width"]),
+                        int(self.config["window"]["height"]))
+
+        # read playlist
+        if exists(user_config_dir(self.appname) + '/playlist'):
+            with open(user_config_dir(self.appname) + '/playlist', 'r') as playlist:
+                for line in playlist:
+                    self.load_file(line.rstrip("\n"))
+
+    def closeEvent(self, event):
+        self.config["window"] = {}
+        self.config["window"]["width"] = str(self.geometry().width())
+        self.config["window"]["height"] = str(self.geometry().height())
+        user_config_path = Path(user_config_dir(self.appname))
+        if not user_config_path.exists():
+            user_config_path.mkdir(parents=True)
+
+        with open(user_config_dir(self.appname) + '/config.ini', 'w') as configfile:
+            self.config.write(configfile)
+
+        # write playlist
+
+        filenames = []
+
+        for r in range(self.model.rowCount()):
+            index = self.model.index(r, 4)
+            filenames.append(self.model.data(index))
+
+        if filenames:
+            with open(user_config_dir(self.appname) + '/playlist', 'w') as playlist:
+                for line in filenames:
+                    playlist.write(line + "\n")
 
     def build_gui(self):
         self.load_btn = QtWidgets.QPushButton("Load")
@@ -231,19 +277,15 @@ class MyWidget(QtWidgets.QWidget):
         layout.addLayout(h_layout)
         self.setLayout(layout)
 
-        self.load_btn.clicked.connect(self.load)
-        self.play_btn.clicked.connect(self.play)
-        self.stop_btn.clicked.connect(self.stop)
-        self.prev_btn.clicked.connect(self.prev)
-        self.next_btn.clicked.connect(self.next)
+        self.load_btn.clicked.connect(self.load_clicked)
+        self.play_btn.clicked.connect(self.play_clicked)
+        self.stop_btn.clicked.connect(self.stop_clicked)
+        self.prev_btn.clicked.connect(self.prev_clicked)
+        self.next_btn.clicked.connect(self.next_clicked)
 
         self.tree.setSelectionMode(QTreeView.MultiSelection)
 
-    @QtCore.Slot()
-    def load(self):
-        filename, filter = QFileDialog.getOpenFileName(
-            self, caption="Load music file")
-
+    def load_file(self, filename):
         try:
             song = uade.load_song(filename)
         except Exception:
@@ -254,7 +296,15 @@ class MyWidget(QtWidgets.QWidget):
                 song.name), QStandardItem(str(song.duration)), QStandardItem(song.player), QStandardItem(song.filename)])
 
     @QtCore.Slot()
-    def play(self):
+    def load_clicked(self):
+        filename, filter = QFileDialog.getOpenFileName(
+            self, caption="Load music file")
+
+        if filename:
+            self.load_file(filename)
+
+    @QtCore.Slot()
+    def play_clicked(self):
         if self.model.rowCount(self.tree.rootIndex()) > 0:
             indexes = self.tree.selectedIndexes()
             if not indexes:
@@ -268,17 +318,17 @@ class MyWidget(QtWidgets.QWidget):
             self.thread.running = True
 
     @QtCore.Slot()
-    def stop(self):
+    def stop_clicked(self):
         self.thread.running = False
         self.thread.quit()
         # self.thread.wait()
 
     @QtCore.Slot()
-    def prev(self):
+    def prev_clicked(self):
         pass
 
     @QtCore.Slot()
-    def next(self):
+    def next_clicked(self):
         pass
 
     @QtCore.Slot()
@@ -290,7 +340,7 @@ if __name__ == "__main__":
     app = QtWidgets.QApplication([])
 
     widget = MyWidget()
-    widget.resize(800, 600)
+    #widget.resize(800, 600)
     widget.show()
 
     sys.exit(app.exec())
