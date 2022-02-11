@@ -1,20 +1,42 @@
+from logging import exception
 import sys
 import time
+import ntpath
 import numpy as np
 import sounddevice as sd
 import soundfile as sf
 from PySide6 import QtCore, QtWidgets
-from PySide6.QtCore import QThread
-from PySide6.QtWidgets import QFileDialog, QListWidgetItem
+from PySide6.QtCore import QThread, QAbstractItemModel, QModelIndex, QItemSelectionModel
+from PySide6.QtWidgets import QFileDialog, QListWidgetItem, QTreeView
+from PySide6.QtGui import QStandardItem, QStandardItemModel
 import debugpy
 from uaddef import *
 from externallibs import *
+
+
+class Subsong():
+    cur: int = 0
+    min: int = 0
+    max: int = 0
+    def_: int = 0
+
+
+class Song():
+    name: str = ""
+    filename: str = ""
+    duration: int = 0
+    player: str = ""
+    format: str = ""
+    subsongs: Subsong = []
+
 
 class Pyuade(object):
     def __init__(self, *args):
         libao.ao_initialize()
 
-    def load_song(self, fname):
+    def load_song(self, fname) -> Song:
+        self.state = libuade.uade_new_state(None)
+
         size = c_size_t()
         buf = c_void_p()
 
@@ -22,40 +44,51 @@ class Pyuade(object):
             byref(size), str.encode(fname))
 
         if not buf:
-            print("Can not read file", fname)
+            raise Exception(
+                "uade_read_file: Cannot read file: {}".format(fname))
 
         ret = libuade.uade_play(str.encode(fname), -1, self.state)
 
         if ret < 0:
-            print("uade_play_from_buffer: error")
+            raise Exception("uade_play: fatal error: {}, ".format(fname))
         elif ret == 0:
-            print("Can not play", fname)
+            raise Exception(
+                "uade_play: file cannot be played: {}, ".format(fname))
 
         libc.free(buf)
 
         info = libuade.uade_get_song_info(self.state).contents
 
+        song = Song()
+
         if info.formatname:
-            print("Format name:", info.formatname.decode())
+            song.format = info.formatname.decode()
         if info.modulename:
-            print("Module name:", info.modulename.decode())
+            song.name = info.modulename.decode()
         if info.playername:
-            print("Player name:", info.playername.decode())
+            song.player = info.playername.decode()
 
-        print(
-            f"subsongs: cur {info.subsongs.cur} min {info.subsongs.min} max {info.subsongs.max}")
+        # print(f"subsongs: cur {info.subsongs.cur} min {info.subsongs.min} max {info.subsongs.max}")
+        if info.subsongs:
+            subsong = Subsong()
+            subsong.cur = info.subsongs.cur
+            subsong.min = info.subsongs.min
+            subsong.max = info.subsongs.max
+            # subsong.def_ = info.subsongs.def
 
-    def init_play(self, fname):
+        return song
+
+    def init_play(self, filename):
         print("Start playing")
 
         self.state = libuade.uade_new_state(None)
 
         if not self.state:
-            print("uade_state is NULL")
+            raise Exception("uade_state is NULL")
 
         samplerate = libuade.uade_get_sampling_rate(self.state)
 
-        self.load_song(fname)
+        self.load_song(filename)
 
         format = ao_sample_format(
             2 * 8, libuade.uade_get_sampling_rate(self.state), 2, 4)
@@ -78,11 +111,9 @@ class Pyuade(object):
         # a = np.frombuffer(pa.contents, dtype=np.int16)
 
         if nbytes < 0:
-            print("Playback error.")
-            return False
+            raise Exception("Playback error")
         elif nbytes == 0:
-            print("Song end.")
-            return False
+            raise EOFError("Song end")
 
         # total = np.append(total, a)
 
@@ -132,23 +163,37 @@ class Pyuade(object):
         self.state = 0
 
 
+uade = Pyuade()
+
+
 class MyThread(QThread):
+    current_filename: str = []
+
     def __init__(self, parent=None):
         QThread.__init__(self, parent)
         self.running = True
 
     def run(self):
         debugpy.debug_this_thread()
-        self.uade.init_play(self.current_fname)
+        uade.init_play(self.current_filename)
 
         while self.running:
-            # sys.stdout.write('.')
-            # sys.stdout.flush()
-            # time.sleep(1)
-            if not self.uade.play():
+            try:
+                uade.play()
+            except EOFError:
+                self.running = False
+            except Exception:
                 self.running = False
 
-        self.uade.stop()
+        uade.stop()
+
+
+class Playlist:
+    def __init__(self):
+        pass
+
+    def insert_song():
+        pass
 
 
 class MyWidget(QtWidgets.QWidget):
@@ -157,23 +202,31 @@ class MyWidget(QtWidgets.QWidget):
 
         self.build_gui()
 
-        self.uade = Pyuade()
-
         self.thread = MyThread()
 
     def build_gui(self):
         self.load_btn = QtWidgets.QPushButton("Load")
         self.play_btn = QtWidgets.QPushButton("Play")
         self.stop_btn = QtWidgets.QPushButton("Stop")
-        self.list = QtWidgets.QListWidget()
+        self.prev_btn = QtWidgets.QPushButton("Prev")
+        self.next_btn = QtWidgets.QPushButton("Next")
+        self.tree = QtWidgets.QListWidget()
+
+        self.tree = QTreeView()
+        self.model = QStandardItemModel(0, 4)
+        self.model.setHorizontalHeaderLabels(
+            ["Filename", "Songname", "Duration", "Player", "Path"])
+        self.tree.setModel(self.model)
 
         layout = QtWidgets.QVBoxLayout()
-        layout.addWidget(self.list)
+        layout.addWidget(self.tree)
 
         h_layout = QtWidgets.QHBoxLayout()
         h_layout.addWidget(self.load_btn)
         h_layout.addWidget(self.play_btn)
         h_layout.addWidget(self.stop_btn)
+        h_layout.addWidget(self.prev_btn)
+        h_layout.addWidget(self.next_btn)
 
         layout.addLayout(h_layout)
         self.setLayout(layout)
@@ -181,26 +234,53 @@ class MyWidget(QtWidgets.QWidget):
         self.load_btn.clicked.connect(self.load)
         self.play_btn.clicked.connect(self.play)
         self.stop_btn.clicked.connect(self.stop)
+        self.prev_btn.clicked.connect(self.prev)
+        self.next_btn.clicked.connect(self.next)
+
+        self.tree.setSelectionMode(QTreeView.MultiSelection)
 
     @QtCore.Slot()
     def load(self):
-        fileName = QFileDialog.getOpenFileName(self, caption="Load music file")
-        item = QListWidgetItem(str(fileName[0]), self.list)
-        # item.
+        filename, filter = QFileDialog.getOpenFileName(
+            self, caption="Load music file")
+
+        try:
+            song = uade.load_song(filename)
+        except Exception:
+            print("Loading file failed: ", filename)
+        else:
+            song.filename = filename
+            self.model.appendRow([QStandardItem(ntpath.basename(song.filename)), QStandardItem(
+                song.name), QStandardItem(str(song.duration)), QStandardItem(song.player), QStandardItem(song.filename)])
+
     @QtCore.Slot()
     def play(self):
-        # self.uade.play()
-        self.thread.uade = self.uade
-        self.thread.current_fname = self.list.item(0).text()
-        self.thread.start()
-        self.thread.running = True
+        if self.model.rowCount(self.tree.rootIndex()) > 0:
+            indexes = self.tree.selectedIndexes()
+            if not indexes:
+                self.tree.selectionModel().select(self.model.index(
+                    0, 0), QItemSelectionModel.Select | QItemSelectionModel.Rows)
+                indexes = self.tree.selectedIndexes()
+
+            self.thread.current_filename = self.model.itemFromIndex(
+                indexes[4]).text()
+            self.thread.start()
+            self.thread.running = True
 
     @QtCore.Slot()
     def stop(self):
         self.thread.running = False
         self.thread.quit()
         # self.thread.wait()
-    
+
+    @QtCore.Slot()
+    def prev(self):
+        pass
+
+    @QtCore.Slot()
+    def next(self):
+        pass
+
     @QtCore.Slot()
     def clicked(self):
         print("click")
