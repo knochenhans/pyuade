@@ -1,6 +1,7 @@
 from ast import For
 from genericpath import exists
 from logging import exception
+import os
 import pathlib
 from pyexpat import model
 import sys
@@ -10,7 +11,7 @@ import numpy as np
 import sounddevice as sd
 import soundfile as sf
 from PySide6 import QtCore, QtWidgets
-from PySide6.QtCore import QSettings, QThread, QAbstractItemModel, QModelIndex, QItemSelectionModel
+from PySide6.QtCore import QObject, QSettings, QThread, QAbstractItemModel, QModelIndex, QItemSelectionModel, Signal
 from PySide6.QtWidgets import QFileDialog, QListWidgetItem, QTreeView
 from PySide6.QtGui import QStandardItem, QStandardItemModel
 import debugpy
@@ -38,8 +39,11 @@ class Song():
     subsongs: Subsong = []
 
 
-class Pyuade(object):
-    def __init__(self, *args):
+class Pyuade(QObject):
+    song_end = Signal()
+
+    def __init__(self):
+        super().__init__()
         libao.ao_initialize()
 
     def load_song(self, fname) -> Song:
@@ -174,7 +178,7 @@ class Pyuade(object):
 uade = Pyuade()
 
 
-class MyThread(QThread):
+class PlayerThread(QThread):
     current_filename: str = []
 
     def __init__(self, parent=None):
@@ -205,12 +209,15 @@ class Playlist:
 
 
 class MyWidget(QtWidgets.QWidget):
+    current_track: QModelIndex
+    playing: bool = False
+
     def __init__(self):
         super().__init__()
 
         self.build_gui()
 
-        self.thread = MyThread()
+        self.thread = PlayerThread()
         # self.settings = QSettings("Andre Jonas", "pyuade")
         self.appname = "pyuade"
         self.appauthor = "Andre Jonas"
@@ -297,11 +304,18 @@ class MyWidget(QtWidgets.QWidget):
 
     @QtCore.Slot()
     def load_clicked(self):
-        filename, filter = QFileDialog.getOpenFileName(
-            self, caption="Load music file")
+        last_open_path = self.config["files"]["last_open_path"]
 
-        if filename:
-            self.load_file(filename)
+        filenames, filter = QFileDialog.getOpenFileNames(
+            self, caption="Load music file", dir=last_open_path)
+
+        if filenames:
+            for filename in filenames:
+                self.load_file(filename)
+
+            self.config["files"] = {}
+            self.config["files"]["last_open_path"] = os.path.dirname(
+                os.path.abspath(filename))
 
     @QtCore.Slot()
     def play_clicked(self):
@@ -312,10 +326,12 @@ class MyWidget(QtWidgets.QWidget):
                     0, 0), QItemSelectionModel.Select | QItemSelectionModel.Rows)
                 indexes = self.tree.selectedIndexes()
 
+            self.current_track = indexes
             self.thread.current_filename = self.model.itemFromIndex(
-                indexes[4]).text()
+                self.current_track[4]).text()
             self.thread.start()
             self.thread.running = True
+            self.playing = True
 
     @QtCore.Slot()
     def stop_clicked(self):
