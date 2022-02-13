@@ -8,13 +8,15 @@ import sys
 import time
 import ntpath
 import numpy as np
+from sklearn import tree
 import sounddevice as sd
 import soundfile as sf
 from PySide6 import QtCore, QtWidgets
-from PySide6.QtCore import QObject, QSettings, QThread, QAbstractItemModel, QModelIndex, QItemSelectionModel, Signal
-from PySide6.QtWidgets import QAbstractItemView, QFileDialog, QListWidgetItem, QTreeView
-from PySide6.QtGui import QStandardItem, QStandardItemModel
+from PySide6.QtCore import QCoreApplication, QObject, QSettings, QSize, QThread, QAbstractItemModel, QModelIndex, QItemSelectionModel, Signal
+from PySide6.QtWidgets import QAbstractItemView, QFileDialog, QListWidgetItem, QMenu, QStatusBar, QToolBar, QTreeView
+from PySide6.QtGui import QAction, QIcon, QStandardItem, QStandardItemModel
 import debugpy
+from soupsieve import select
 from uaddef import *
 from externallibs import *
 import configparser
@@ -209,7 +211,7 @@ class Playlist:
         pass
 
 
-class MyWidget(QtWidgets.QWidget):
+class MyWidget(QtWidgets.QMainWindow):
     current_index: QModelIndex
     playing: bool = False
 
@@ -244,19 +246,22 @@ class MyWidget(QtWidgets.QWidget):
 
         # Read config
 
+        self.config["window"] = {}
+        self.config["files"] = {}
+
         if self.config.read(user_config_dir(self.appname) + '/config.ini'):
             self.resize(int(self.config["window"]["width"]),
                         int(self.config["window"]["height"]))
 
-            current_item_row = int(self.config["files"]["current_item"])
+            if self.config.has_option("files", "current_item"):
+                current_item_row = int(self.config["files"]["current_item"])
 
-            if current_item_row >= self.model.rowCount(self.tree.rootIndex()) - 1:
-                self.current_index = self.model.index(current_item_row, 4)
+                if current_item_row >= 0 and current_item_row < self.model.rowCount(self.tree.rootIndex()) - 1:
+                    self.current_index = self.model.index(current_item_row, 4)
 
     def write_config(self):
         # Write config
 
-        self.config["window"] = {}
         self.config["window"]["width"] = str(self.geometry().width())
         self.config["window"]["height"] = str(self.geometry().height())
 
@@ -264,8 +269,7 @@ class MyWidget(QtWidgets.QWidget):
         if not user_config_path.exists():
             user_config_path.mkdir(parents=True)
 
-        self.config["files"] = {}
-        if self.current_index:
+        if self.current_index.row() >= 0:
             self.config["files"]["current_item"] = str(
                 self.current_index.row())
 
@@ -289,11 +293,9 @@ class MyWidget(QtWidgets.QWidget):
         self.write_config()
 
     def build_gui(self):
-        self.load_btn = QtWidgets.QPushButton("Load")
-        self.play_btn = QtWidgets.QPushButton("Play")
-        self.stop_btn = QtWidgets.QPushButton("Stop")
-        self.prev_btn = QtWidgets.QPushButton("Prev")
-        self.next_btn = QtWidgets.QPushButton("Next")
+        
+        # Tree
+        
         self.tree = QtWidgets.QListWidget()
 
         self.tree = QTreeView()
@@ -302,29 +304,91 @@ class MyWidget(QtWidgets.QWidget):
             ["Filename", "Songname", "Duration", "Player", "Path"])
         self.tree.setModel(self.model)
 
-        layout = QtWidgets.QVBoxLayout()
-        layout.addWidget(self.tree)
-
-        h_layout = QtWidgets.QHBoxLayout()
-        h_layout.addWidget(self.load_btn)
-        h_layout.addWidget(self.play_btn)
-        h_layout.addWidget(self.stop_btn)
-        h_layout.addWidget(self.prev_btn)
-        h_layout.addWidget(self.next_btn)
-
-        layout.addLayout(h_layout)
-        self.setLayout(layout)
-
-        self.load_btn.clicked.connect(self.load_clicked)
-        self.play_btn.clicked.connect(self.play_clicked)
-        self.stop_btn.clicked.connect(self.stop_clicked)
-        self.prev_btn.clicked.connect(self.prev_clicked)
-        self.next_btn.clicked.connect(self.next_clicked)
+        self.setCentralWidget(self.tree)
 
         self.tree.setSelectionMode(QTreeView.ExtendedSelection)
         self.tree.setEditTriggers(QAbstractItemView.NoEditTriggers)
 
         self.tree.doubleClicked.connect(self.item_doubleClicked)
+        self.tree.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+        self.tree.customContextMenuRequested.connect(self.openMenu)
+
+        # Actions
+
+        toolbar = QToolBar("Toolbar")
+        toolbar.setIconSize(QSize(16, 16))
+        self.addToolBar(toolbar)
+
+        load_action = QAction("Load", self)
+        load_action.setStatusTip("Load")
+        load_action.triggered.connect(self.load_clicked)
+
+        quit_action = QAction("Quit", self)
+        quit_action.setStatusTip("Quit")
+        quit_action.triggered.connect(self.quit_clicked)
+
+        play_action = QAction(QIcon("play.svg"), "Play", self)
+        play_action.setStatusTip("Play")
+        play_action.triggered.connect(self.play_clicked)
+        toolbar.addAction(play_action)
+
+        stop_action = QAction(QIcon("stop.svg"), "Stop", self)
+        stop_action.setStatusTip("Stop")
+        stop_action.triggered.connect(self.stop_clicked)
+        toolbar.addAction(stop_action)
+
+        prev_action = QAction(QIcon("prev.svg"), "Prev", self)
+        prev_action.setStatusTip("Prev")
+        prev_action.triggered.connect(self.prev_clicked)
+        toolbar.addAction(prev_action)
+
+        next_action = QAction(QIcon("next.svg"), "Next", self)
+        next_action.setStatusTip("Next")
+        next_action.triggered.connect(self.next_clicked)
+        toolbar.addAction(next_action)
+
+        self.delete_action = QAction("Delete", self)
+        self.delete_action.setStatusTip("Delete")
+        self.delete_action.triggered.connect(self.delete_clicked)
+        toolbar.addAction(self.delete_action)
+
+        self.setStatusBar(QStatusBar(self))
+
+        # Menu
+
+        menu = self.menuBar()
+
+        file_menu = menu.addMenu("&File")
+        file_menu.addAction(load_action)
+        file_menu.addSeparator()
+        file_menu.addAction(quit_action)
+
+        edit_menu = menu.addMenu("&Edit")
+        edit_menu.addAction(self.delete_action)
+
+    def openMenu(self, position):
+        menu = QMenu()
+        menu.addAction(self.delete_action)
+
+        menu.exec(self.tree.viewport().mapToGlobal(position))
+
+    def delete_selected_items(self):
+        while self.tree.selectionModel().selectedRows(0):
+            idx = self.tree.selectionModel().selectedRows(0)[0]
+            if idx.row() == self.current_index.row():
+                self.current_index = self.tree.indexBelow(
+                    self.current_index)
+
+            self.model.removeRow(idx.row(), idx.parent())
+
+    def keyPressEvent(self, event):
+        if self.tree.selectionModel().selectedRows(0):
+            if event.key() == QtCore.Qt.Key_Delete:
+                self.delete_selected_items()
+
+    @QtCore.Slot()
+    def quit_clicked(self):
+        QCoreApplication.quit()
 
     @QtCore.Slot()
     def item_doubleClicked(self, index):
@@ -372,11 +436,19 @@ class MyWidget(QtWidgets.QWidget):
                 song.name), QStandardItem(str(song.duration)), QStandardItem(song.player), QStandardItem(song.filename)])
 
     @QtCore.Slot()
-    def load_clicked(self):
-        last_open_path = self.config["files"]["last_open_path"]
+    def delete_clicked(self):
+        self.delete_selected_items()
 
-        filenames, filter = QFileDialog.getOpenFileNames(
-            self, caption="Load music file", dir=last_open_path)
+    @QtCore.Slot()
+    def load_clicked(self):
+        if self.config.has_option("files", "last_open_path"):
+            last_open_path = self.config["files"]["last_open_path"]
+
+            filenames, filter = QFileDialog.getOpenFileNames(
+                self, caption="Load music file", dir=last_open_path)
+        else:
+            filenames, filter = QFileDialog.getOpenFileNames(
+                self, caption="Load music file")
 
         if filenames:
             for filename in filenames:
@@ -401,10 +473,6 @@ class MyWidget(QtWidgets.QWidget):
     @QtCore.Slot()
     def next_clicked(self):
         self.play_next_item()
-
-    @QtCore.Slot()
-    def clicked(self):
-        print("click")
 
     @QtCore.Slot()
     def item_finished(self):
