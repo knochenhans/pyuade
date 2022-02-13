@@ -12,7 +12,7 @@ import sounddevice as sd
 import soundfile as sf
 from PySide6 import QtCore, QtWidgets
 from PySide6.QtCore import QObject, QSettings, QThread, QAbstractItemModel, QModelIndex, QItemSelectionModel, Signal
-from PySide6.QtWidgets import QFileDialog, QListWidgetItem, QTreeView
+from PySide6.QtWidgets import QAbstractItemView, QFileDialog, QListWidgetItem, QTreeView
 from PySide6.QtGui import QStandardItem, QStandardItemModel
 import debugpy
 from uaddef import *
@@ -125,7 +125,8 @@ class Pyuade(QObject):
         if nbytes < 0:
             raise Exception("Playback error")
         elif nbytes == 0:
-            raise EOFError("Song end")
+            self.song_end.emit()
+            # raise EOFError("Song end")
 
         # total = np.append(total, a)
 
@@ -209,8 +210,13 @@ class Playlist:
 
 
 class MyWidget(QtWidgets.QWidget):
-    current_track: QModelIndex
+    current_index: QModelIndex
     playing: bool = False
+
+    def next_track(self):
+        if self.current_index.row() < self.model.rowCount():
+            self.current_index = self.model.index(
+                self.current_index.row() + 1, 4)
 
     def __init__(self):
         super().__init__()
@@ -218,33 +224,55 @@ class MyWidget(QtWidgets.QWidget):
         self.build_gui()
 
         self.thread = PlayerThread()
-        # self.settings = QSettings("Andre Jonas", "pyuade")
         self.appname = "pyuade"
         self.appauthor = "Andre Jonas"
 
         self.config = configparser.ConfigParser()
-        if self.config.read(user_config_dir(self.appname) + '/config.ini'):
-            self.resize(int(self.config["window"]["width"]),
-                        int(self.config["window"]["height"]))
+        self.current_index = self.model.index(0, 4)
 
-        # read playlist
+        self.read_config()
+
+        uade.song_end.connect(self.song_end)
+
+    def read_config(self):
+        # Read playlist
+
         if exists(user_config_dir(self.appname) + '/playlist'):
             with open(user_config_dir(self.appname) + '/playlist', 'r') as playlist:
                 for line in playlist:
                     self.load_file(line.rstrip("\n"))
 
-    def closeEvent(self, event):
+        # Read config
+
+        if self.config.read(user_config_dir(self.appname) + '/config.ini'):
+            self.resize(int(self.config["window"]["width"]),
+                        int(self.config["window"]["height"]))
+
+            current_item_row = int(self.config["files"]["current_item"])
+
+            if current_item_row >= self.model.rowCount(self.tree.rootIndex()) - 1:
+                self.current_index = self.model.index(current_item_row, 4)
+
+    def write_config(self):
+        # Write config
+
         self.config["window"] = {}
         self.config["window"]["width"] = str(self.geometry().width())
         self.config["window"]["height"] = str(self.geometry().height())
+
         user_config_path = Path(user_config_dir(self.appname))
         if not user_config_path.exists():
             user_config_path.mkdir(parents=True)
 
+        self.config["files"] = {}
+        if self.current_index:
+            self.config["files"]["current_item"] = str(
+                self.current_index.row())
+
         with open(user_config_dir(self.appname) + '/config.ini', 'w') as configfile:
             self.config.write(configfile)
 
-        # write playlist
+        # Write playlist
 
         filenames = []
 
@@ -256,6 +284,9 @@ class MyWidget(QtWidgets.QWidget):
             with open(user_config_dir(self.appname) + '/playlist', 'w') as playlist:
                 for line in filenames:
                     playlist.write(line + "\n")
+
+    def closeEvent(self, event):
+        self.write_config()
 
     def build_gui(self):
         self.load_btn = QtWidgets.QPushButton("Load")
@@ -290,7 +321,33 @@ class MyWidget(QtWidgets.QWidget):
         self.prev_btn.clicked.connect(self.prev_clicked)
         self.next_btn.clicked.connect(self.next_clicked)
 
-        self.tree.setSelectionMode(QTreeView.MultiSelection)
+        self.tree.setSelectionMode(QTreeView.ExtendedSelection)
+        self.tree.setEditTriggers(QAbstractItemView.NoEditTriggers)
+
+        self.tree.doubleClicked.connect(self.item_doubleClicked)
+
+    @QtCore.Slot()
+    def item_doubleClicked(self, index):
+        self.play(self.tree.selectedIndexes()[4])
+
+    def play(self, index):
+        self.play_file_thread(self.model.itemFromIndex(index).text())
+        self.current_index = index
+
+        self.tree.selectionModel().select(self.current_index,
+                                          QItemSelectionModel.SelectCurrent | QItemSelectionModel.Rows)
+
+    def play_file_thread(self, filename: str):
+        # Play filename saved in current item
+        self.thread.current_filename = filename
+        self.thread.start()
+        self.thread.running = True
+        self.playing = True
+
+    def stop(self):
+        self.thread.running = False
+        self.thread.quit()
+        self.thread.wait()
 
     def load_file(self, filename):
         try:
@@ -313,43 +370,39 @@ class MyWidget(QtWidgets.QWidget):
             for filename in filenames:
                 self.load_file(filename)
 
-            self.config["files"] = {}
             self.config["files"]["last_open_path"] = os.path.dirname(
                 os.path.abspath(filename))
 
     @QtCore.Slot()
     def play_clicked(self):
         if self.model.rowCount(self.tree.rootIndex()) > 0:
-            indexes = self.tree.selectedIndexes()
-            if not indexes:
-                self.tree.selectionModel().select(self.model.index(
-                    0, 0), QItemSelectionModel.Select | QItemSelectionModel.Rows)
-                indexes = self.tree.selectedIndexes()
-
-            self.current_track = indexes
-            self.thread.current_filename = self.model.itemFromIndex(
-                self.current_track[4]).text()
-            self.thread.start()
-            self.thread.running = True
-            self.playing = True
+            self.play(self.current_index)
 
     @QtCore.Slot()
     def stop_clicked(self):
-        self.thread.running = False
-        self.thread.quit()
-        # self.thread.wait()
+        self.stop()
 
     @QtCore.Slot()
     def prev_clicked(self):
-        pass
+        self.stop()
+
+        if self.current_index.row() > 0:
+            self.play(self.tree.indexAbove(self.current_index))
 
     @QtCore.Slot()
     def next_clicked(self):
-        pass
+        self.stop()
+
+        if self.current_index.row() < self.model.rowCount(self.tree.rootIndex()) - 1:
+            self.play(self.tree.indexBelow(self.current_index))
 
     @QtCore.Slot()
     def clicked(self):
         print("click")
+
+    @QtCore.Slot()
+    def song_end(self):
+        print("Ende")
 
 
 if __name__ == "__main__":
