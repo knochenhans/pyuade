@@ -232,7 +232,7 @@ class MyWidget(QtWidgets.QWidget):
 
         self.read_config()
 
-        uade.song_end.connect(self.song_end)
+        uade.song_end.connect(self.item_finished)
 
     def read_config(self):
         # Read playlist
@@ -331,8 +331,12 @@ class MyWidget(QtWidgets.QWidget):
         self.play(self.tree.selectedIndexes()[4])
 
     def play(self, index):
+        self.stop()
+
         self.play_file_thread(self.model.itemFromIndex(index).text())
         self.current_index = index
+
+        # Select playing track
 
         self.tree.selectionModel().select(self.current_index,
                                           QItemSelectionModel.SelectCurrent | QItemSelectionModel.Rows)
@@ -348,6 +352,14 @@ class MyWidget(QtWidgets.QWidget):
         self.thread.running = False
         self.thread.quit()
         self.thread.wait()
+
+    def play_next_item(self):
+        if self.current_index.row() < self.model.rowCount(self.tree.rootIndex()) - 1:
+            self.play(self.tree.indexBelow(self.current_index))
+
+    def play_previous_item(self):
+        if self.current_index.row() > 0:
+            self.play(self.tree.indexAbove(self.current_index))
 
     def load_file(self, filename):
         try:
@@ -384,32 +396,25 @@ class MyWidget(QtWidgets.QWidget):
 
     @QtCore.Slot()
     def prev_clicked(self):
-        self.stop()
-
-        if self.current_index.row() > 0:
-            self.play(self.tree.indexAbove(self.current_index))
+        self.play_previous_item()
 
     @QtCore.Slot()
     def next_clicked(self):
-        self.stop()
-
-        if self.current_index.row() < self.model.rowCount(self.tree.rootIndex()) - 1:
-            self.play(self.tree.indexBelow(self.current_index))
+        self.play_next_item()
 
     @QtCore.Slot()
     def clicked(self):
         print("click")
 
     @QtCore.Slot()
-    def song_end(self):
-        print("Ende")
+    def item_finished(self):
+        self.play_next_item()
 
 
 if __name__ == "__main__":
     app = QtWidgets.QApplication([])
 
     widget = MyWidget()
-    #widget.resize(800, 600)
     widget.show()
 
     sys.exit(app.exec())
