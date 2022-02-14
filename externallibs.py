@@ -32,6 +32,8 @@ libuade.uade_stop.argtypes = [c_void_p]
 
 libuade.uade_cleanup_state.argtypes = [c_void_p]
 
+libuade.uade_next_subsong.argtypes = [c_void_p]
+
 libao.ao_open_live.argtypes = [c_int, c_void_p, c_void_p]
 libao.ao_open_live.restype = c_void_p
 
