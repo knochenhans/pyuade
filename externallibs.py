@@ -23,7 +23,9 @@ libuade.uade_play.restype = c_int
 libuade.uade_get_song_info.argtypes = [c_void_p]
 libuade.uade_get_song_info.restype = POINTER(uade_song_info)
 
-libuade.uade_read_notification.argtypes = [c_void_p, c_void_p]
+libuade.uade_read_notification.argtypes = [POINTER(uade_notification), c_void_p]
+
+libuade.uade_cleanup_notification.argtypes = [POINTER(uade_notification)]
 
 libuade.uade_read.argtypes = [c_void_p, c_size_t, c_void_p]
 libuade.uade_read.restype = c_ssize_t

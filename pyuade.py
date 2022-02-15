@@ -91,7 +91,7 @@ class Pyuade(QObject):
         return song
 
     def init_play(self, filename, subsong):
-        print("Start playing")
+        # print("Start playing " + filename)
 
         self.state = libuade.uade_new_state(None)
 
@@ -125,11 +125,54 @@ class Pyuade(QObject):
 
         if nbytes < 0:
             raise Exception("Playback error")
-        elif nbytes == 0:
-            self.song_end.emit()
+        # elif nbytes == 0:
+            # self.song_end.emit()
             # raise EOFError("Song end")
 
         # total = np.append(total, a)
+
+        notification_song_end = uade_notification_song_end(
+            happy=0, stopnow=0, subsong=0, subsongbytes=0, reason=None)
+
+        notification_union = uade_notification_union(
+            msg=None, song_end=notification_song_end)
+
+        notification = uade_notification(
+            type=0, uade_notification_union=notification_union)
+
+        class UADE_NOTIFICATION_TYPE(IntEnum):
+            UADE_NOTIFICATION_MESSAGE = 0
+            UADE_NOTIFICATION_SONG_END = 1
+
+        if libuade.uade_read_notification(notification, self.state) == 1:
+            if notification.type == UADE_NOTIFICATION_TYPE.UADE_NOTIFICATION_MESSAGE:
+                print("uade notification: information")
+            elif notification.type == UADE_NOTIFICATION_TYPE.UADE_NOTIFICATION_SONG_END:
+                self.song_end.emit()
+
+                if notification_union.msg:
+                    print("uade_notification.msg: " +
+                          str(notification_union.msg))
+
+                if notification_song_end.happy != 0:
+                    print("song_end.happy: " + str(notification_song_end.happy))
+
+                if notification_song_end.stopnow != 0:
+                    print("song_end.stopnow: " +
+                          str(notification_song_end.stopnow))
+
+                if notification_song_end.subsong != 0:
+                    print("song_end.subsong: " +
+                          str(notification_song_end.subsong))
+
+                if notification_song_end.subsongbytes != 0:
+                    print("song_end.subsongbytes: " +
+                          str(notification_song_end.subsongbytes))
+
+                if notification_song_end.reason:
+                    print("song_end.reason: " + notification_song_end.reason)
+
+            libuade.uade_cleanup_notification(notification)
 
         if not libao.ao_play(self.libao_device, self.buf, nbytes):
             return False
@@ -164,7 +207,7 @@ class Pyuade(QObject):
         #     while stream.active:
         #         continue
     def stop(self):
-        print("Stop playing")
+        # print("Stop playing")
 
         if libuade.uade_stop(self.state) != 0:
             print("uade_stop error")
@@ -418,11 +461,12 @@ class MyWidget(QtWidgets.QMainWindow):
             if event.key() == QtCore.Qt.Key_Delete:
                 self.delete_selected_items()
 
-    @QtCore.Slot()
+    @ QtCore.Slot()
     def quit_clicked(self):
+        self.stop()
         QCoreApplication.quit()
 
-    @QtCore.Slot()
+    @ QtCore.Slot()
     def item_doubleClicked(self, index):
         self.play(self.tree.selectedIndexes()[0].row())
 
@@ -490,11 +534,11 @@ class MyWidget(QtWidgets.QMainWindow):
 
                 self.model.appendRow(tree_rows)
 
-    @QtCore.Slot()
+    @ QtCore.Slot()
     def delete_clicked(self):
         self.delete_selected_items()
 
-    @QtCore.Slot()
+    @ QtCore.Slot()
     def load_clicked(self):
         if self.config.has_option("files", "last_open_path"):
             last_open_path = self.config["files"]["last_open_path"]
@@ -512,25 +556,26 @@ class MyWidget(QtWidgets.QMainWindow):
             self.config["files"]["last_open_path"] = os.path.dirname(
                 os.path.abspath(filename))
 
-    @QtCore.Slot()
+    @ QtCore.Slot()
     def play_clicked(self):
         if self.model.rowCount(self.tree.rootIndex()) > 0:
             self.play(self.current_row)
 
-    @QtCore.Slot()
+    @ QtCore.Slot()
     def stop_clicked(self):
         self.stop()
 
-    @QtCore.Slot()
+    @ QtCore.Slot()
     def prev_clicked(self):
         self.play_previous_item()
 
-    @QtCore.Slot()
+    @ QtCore.Slot()
     def next_clicked(self):
         self.play_next_item()
 
-    @QtCore.Slot()
+    @ QtCore.Slot()
     def item_finished(self):
+        # print("Playing finished")
         self.play_next_item()
 
 
