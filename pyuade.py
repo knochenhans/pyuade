@@ -1,15 +1,9 @@
-from ast import For
 from enum import IntEnum
 from genericpath import exists
-from logging import exception
 import os
-import pathlib
-from pyexpat import model
 import sys
-import time
 import ntpath
 import numpy as np
-from sklearn import tree
 import sounddevice as sd
 import soundfile as sf
 from PySide6 import QtCore, QtWidgets
@@ -17,11 +11,9 @@ from PySide6.QtCore import QCoreApplication, QObject, QSettings, QSize, QThread,
 from PySide6.QtWidgets import QAbstractItemView, QFileDialog, QListWidgetItem, QMenu, QStatusBar, QToolBar, QTreeView
 from PySide6.QtGui import QAction, QIcon, QStandardItem, QStandardItemModel
 import debugpy
-from soupsieve import select
 from uaddef import *
 from externallibs import *
 import configparser
-import json
 from appdirs import *
 from pathlib import Path
 
