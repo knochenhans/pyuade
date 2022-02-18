@@ -80,8 +80,12 @@ class Uade(QObject):
 
         return event
 
-    def seek(self, bytes_):
-        self.seek_position = bytes_
+    def seek(self, bytes):
+        songinfo: uade_song_info = libuade.uade_get_song_info(
+            self.state).contents
+
+        if libuade.uade_seek_samples(UADE_SEEK_MODE.UADE_SEEK_SUBSONG_RELATIVE, self.bytes_to_samples(bytes), songinfo.subsongs.cur, self.state) != 0:
+            print("Seeking failed")
 
     @ QtCore.Slot()
     def position_changed(self, bytes):
@@ -241,73 +245,69 @@ class Uade(QObject):
 
             libuade.uade_cleanup_notification(notification)
 
+    def samples_to_bytes(self, samples) -> int:
+        return samples * 4
+
+    def bytes_to_samples(self, bytes) -> int:
+        return int(bytes / 4)
+
     def play_threaded(self):
         songinfo: uade_song_info = libuade.uade_get_song_info(
             self.state).contents
 
         if libuade.uade_is_seeking(self.state) == 1:
-            print("Seeking...")
+            print("Currently seeking...")
 
-        if self.seek_position > 0:
-            print(int(self.seek_position / 2 / 16))
-            # if not libuade.uade_seek_samples(UADE_SEEK_MODE.UADE_SEEK_SUBSONG_RELATIVE, int(self.seek_position / 2 / 16), songinfo.subsongs.cur, self.state):
-            if not libuade.uade_seek_samples(UADE_SEEK_MODE.UADE_SEEK_SUBSONG_RELATIVE, 4096 * 1000, songinfo.subsongs.cur, self.state):
-                print("Seeking failed")
-            # print(int(bytes_ / 2 / 16))
-            self.seek_position = 0
-        else:
-            nbytes = libuade.uade_read(self.buf, self.buf_len, self.state)
+        nbytes = libuade.uade_read(self.buf, self.buf_len, self.state)
 
-            # pa = cast(buf, POINTER(c_char * buf_len))
-            # a = np.frombuffer(pa.contents, dtype=np.int16)
+        # pa = cast(buf, POINTER(c_char * buf_len))
+        # a = np.frombuffer(pa.contents, dtype=np.int16)
 
-            if nbytes < 0:
-                raise Exception("Playback error")
-            # elif nbytes == 0:
-                # self.song_end.emit()
-                # raise EOFError("Song end")
+        if nbytes < 0:
+            raise Exception("Playback error")
+        # elif nbytes == 0:
+            # self.song_end.emit()
+            # raise EOFError("Song end")
 
-            # total = np.append(total, a)
+        # total = np.append(total, a)
 
-            # self.check_notifications()
+        # self.check_notifications()
 
-            # Only for RMC songs
-            # print(libuade.uade_get_time_position(1, self.state))
+        # Only for RMC songs
+        # print(libuade.uade_get_time_position(1, self.state))
 
-        
+        self.current_bytes_update.emit(songinfo.subsongbytes)
 
-            self.current_bytes_update.emit(songinfo.subsongbytes)
+        if not libao.ao_play(self.libao_device, self.buf, nbytes):
+            return False
 
-            if not libao.ao_play(self.libao_device, self.buf, nbytes):
-                return False
+        # cast(buf2, POINTER(c_char))
 
-            # cast(buf2, POINTER(c_char))
+        # sd.play(total, 44100)
+        # sd.wait()
 
-            # sd.play(total, 44100)
-            # sd.wait()
+        # for x in range(100):
 
-            # for x in range(100):
+        #     pa = cast(buf2, POINTER(c_char * 4096))
+        #     a = np.frombuffer(pa.contents, dtype=np.int16)
 
-            #     pa = cast(buf2, POINTER(c_char * 4096))
-            #     a = np.frombuffer(pa.contents, dtype=np.int16)
+        # if x >= 6:
+        #     for i in range(16):
+        #         print(a[i], " - ", format(a[i], '#016b'))
+        # total = np.append(total, a)
 
-            # if x >= 6:
-            #     for i in range(16):
-            #         print(a[i], " - ", format(a[i], '#016b'))
-            # total = np.append(total, a)
+        # def callback(outdata, frames, time, status):
+        #     data = wf.buffer_read(frames, dtype='float32')
+        #     if len(data) <= 0:
+        #         raise sd.CallbackAbort
+        #     if len(outdata) > len(data):
+        #         raise sd.CallbackAbort  # wrong obviously
+        #     outdata[:] = data
 
-            # def callback(outdata, frames, time, status):
-            #     data = wf.buffer_read(frames, dtype='float32')
-            #     if len(data) <= 0:
-            #         raise sd.CallbackAbort
-            #     if len(outdata) > len(data):
-            #         raise sd.CallbackAbort  # wrong obviously
-            #     outdata[:] = data
-
-            # with sd.RawOutputStream(channels=wf.channels,
-            #                         callback=callback) as stream:
-            #     while stream.active:
-            #         continue
+        # with sd.RawOutputStream(channels=wf.channels,
+        #                         callback=callback) as stream:
+        #     while stream.active:
+        #         continue
 
         return True
 

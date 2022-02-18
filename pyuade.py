@@ -64,9 +64,6 @@ class TREEVIEWCOL(IntEnum):
 
 
 class MyWidget(QtWidgets.QMainWindow):
-    current_row: QModelIndex
-    playing: bool = False
-
     def next_track(self):
         if self.current_row < self.model.rowCount():
             self.current_row = self.model.index(
@@ -88,34 +85,20 @@ class MyWidget(QtWidgets.QMainWindow):
 
         uade.song_end.connect(self.item_finished)
         uade.current_bytes_update.connect(self.timeline_update)
-        self.timeline.sliderMoved.connect(uade.position_changed)
+        self.timeline.sliderPressed.connect(self.timeline_pressed)
+        self.timeline.sliderReleased.connect(self.timeline_released)
 
-        # info = (c_char * 16384)()
-
-        # i = libuade.uade_song_info(info, sizeof(info), str.encode("/mnt/Daten/Musik/Retro/Games/Benefactor/pru2.ingame-1"), 0)
-
-        # print(info.value.decode())
-
-        # i = libuade.uade_song_info(info, sizeof(info), str.encode("/mnt/Daten/Musik/Retro/Games/Benefactor/pru2.ingame-1"), 1)
-
-        # print(info.value.decode())
-
-        # i = libuade.uade_song_info(info, sizeof(info), str.encode("/mnt/Daten/Musik/Retro/Games/Benefactor/pru2.ingame-1"), 2)
-
-        # print(info.value.decode())
-
-        # song = uade.scan_song(
-        #     "/mnt/Daten/Musik/Retro/Games/pinball dreams - beatbox.mod")
-
-        # self.load_song(song)
+        self.current_row: QModelIndex
+        self.playing: bool = False
+        self.timeline_tracking: bool = True
 
     def read_config(self):
         # Read playlist
 
-        # if exists(user_config_dir(self.appname) + '/playlist'):
-        #     with open(user_config_dir(self.appname) + '/playlist', 'r') as playlist:
-        #         for line in playlist:
-        #             self.load_file(line.rstrip("\n"))
+        if exists(user_config_dir(self.appname) + '/playlist'):
+            with open(user_config_dir(self.appname) + '/playlist', 'r') as playlist:
+                for line in playlist:
+                    self.load_file(line.rstrip("\n"))
 
         # Read config
 
@@ -164,18 +147,18 @@ class MyWidget(QtWidgets.QMainWindow):
 
         # Write playlist
 
-        # filenames = []
+        filenames = []
 
-        # for r in range(self.model.rowCount()):
-        #     index = self.model.index(r, 4)
-        #     filenames.append(self.model.data(index))
+        for r in range(self.model.rowCount()):
+            index = self.model.index(r, 4)
+            filenames.append(self.model.data(index))
 
-        #     # Ignore subsongs, only save one filename per song
-        #     filenames = list(dict.fromkeys(filenames))
+            # Ignore subsongs, only save one filename per song
+            filenames = list(dict.fromkeys(filenames))
 
-        # with open(user_config_dir(self.appname) + '/playlist', 'w') as playlist:
-        #     for line in filenames:
-        #         playlist.write(line + "\n")
+        with open(user_config_dir(self.appname) + '/playlist', 'w') as playlist:
+            for line in filenames:
+                playlist.write(line + "\n")
 
     def closeEvent(self, event):
         self.write_config()
@@ -209,6 +192,10 @@ class MyWidget(QtWidgets.QMainWindow):
         self.delete_action.setStatusTip("Delete")
         self.delete_action.triggered.connect(self.delete_clicked)
 
+        # self.test_action = QAction("Test", self)
+        # self.test_action.setStatusTip("Test")
+        # self.test_action.triggered.connect(self.test_clicked)
+
     def setup_toolbar(self):
         toolbar = QToolBar("Toolbar")
         toolbar.setIconSize(QSize(16, 16))
@@ -218,11 +205,13 @@ class MyWidget(QtWidgets.QMainWindow):
         toolbar.addAction(self.stop_action)
         toolbar.addAction(self.prev_action)
         toolbar.addAction(self.next_action)
+        # toolbar.addAction(self.test_action)
 
         self.timeline = QSlider(QtCore.Qt.Horizontal, self)
         self.timeline.setRange(0, 100)
         self.timeline.setFocusPolicy(QtCore.Qt.NoFocus)
         self.timeline.setPageStep(5)
+        self.timeline.setTracking(False)
         # timeline.setStyleSheet("QSlider::handle:horizontal {background-color: red;}")
 
         toolbar.addWidget(self.timeline)
@@ -296,6 +285,10 @@ class MyWidget(QtWidgets.QMainWindow):
                 self.delete_selected_items()
 
     @ QtCore.Slot()
+    def test_clicked(self):
+        uade.seek(self.timeline.value() * 2)
+
+    @ QtCore.Slot()
     def quit_clicked(self):
         self.stop()
         QCoreApplication.quit()
@@ -327,7 +320,8 @@ class MyWidget(QtWidgets.QMainWindow):
 
         # self.timeline.setMaximum(self.model.itemFromIndex(self.model.index(row, TREEVIEWCOL.DURATION)))
 
-        subsong = self.model.itemFromIndex(self.model.index(self.current_row, 0)).data(QtCore.Qt.UserRole)
+        subsong = self.model.itemFromIndex(self.model.index(
+            self.current_row, 0)).data(QtCore.Qt.UserRole)
 
         self.timeline.setMaximum(subsong.bytes)
         print(self.timeline.maximum())
@@ -377,12 +371,23 @@ class MyWidget(QtWidgets.QMainWindow):
 
             # print(self.model.itemFromIndex(self.model.index(0, 0)).data(QtCore.Qt.UserRole))
 
-    # @ QtCore.Slot()
-    # def timeline_changed(self, bytes):
+    def load_file(self, filename):
+        self.load_song(uade.scan_song(filename))
 
     @ QtCore.Slot()
     def timeline_update(self, bytes):
-        self.timeline.setValue(bytes)
+        if self.timeline_tracking:
+            self.timeline.setValue(bytes)
+
+    @ QtCore.Slot()
+    def timeline_pressed(self):
+        self.timeline_tracking = False
+        print("press")
+
+    @ QtCore.Slot()
+    def timeline_released(self):
+        self.timeline_tracking = True
+        uade.seek(self.timeline.sliderPosition())
 
     @ QtCore.Slot()
     def delete_clicked(self):
