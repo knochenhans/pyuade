@@ -1,3 +1,4 @@
+import datetime
 from enum import IntEnum
 from genericpath import exists
 import os
@@ -8,219 +9,18 @@ import sounddevice as sd
 import soundfile as sf
 from PySide6 import QtCore, QtWidgets
 from PySide6.QtCore import QCoreApplication, QObject, QSettings, QSize, QThread, QAbstractItemModel, QModelIndex, QItemSelectionModel, Signal
-from PySide6.QtWidgets import QAbstractItemView, QFileDialog, QListWidgetItem, QMenu, QStatusBar, QToolBar, QTreeView
+from PySide6.QtWidgets import QAbstractItemView, QFileDialog, QListWidgetItem, QMenu, QSizePolicy, QSlider, QStatusBar, QToolBar, QTreeView, QWidget
 from PySide6.QtGui import QAction, QIcon, QStandardItem, QStandardItemModel
 import debugpy
-from uaddef import *
-from externallibs import *
 import configparser
 from appdirs import *
 from pathlib import Path
+from notifypy import Notify
 
+from ctypes_functions import *
+from uade import *
 
-class Subsong():
-    cur: int = 0
-    min: int = 0
-    max: int = 0
-    def_: int = 0
-
-
-class Song():
-    name: str = ""
-    filename: str = ""
-    duration: int = 0
-    player: str = ""
-    format: str = ""
-    subsong_data: Subsong
-
-
-class Pyuade(QObject):
-    song_end = Signal()
-
-    def __init__(self):
-        super().__init__()
-        libao.ao_initialize()
-
-    # Load and scan a song file
-
-    def load_song(self, filename, subsong_data) -> Song:
-        self.state = libuade.uade_new_state(None)
-
-        size = c_size_t()
-        buf = c_void_p()
-
-        buf = libuade.uade_read_file(
-            byref(size), str.encode(filename))
-
-        if not buf:
-            raise Exception(
-                "uade_read_file: Cannot read file: {}".format(filename))
-
-        ret = libuade.uade_play(str.encode(filename), subsong_data, self.state)
-
-        if ret < 0:
-            raise Exception("uade_play: fatal error: {}, ".format(filename))
-        elif ret == 0:
-            raise Exception(
-                "uade_play: file cannot be played: {}, ".format(filename))
-
-        libc.free(buf)
-
-        info = libuade.uade_get_song_info(self.state).contents
-
-        song = Song()
-
-        if info.formatname:
-            song.format = info.formatname.decode()
-        if info.modulename:
-            song.name = info.modulename.decode()
-        if info.playername:
-            song.player = info.playername.decode()
-
-        # print(f"{filename} - subsongs: cur {info.subsongs.cur} min {info.subsongs.min} max {info.subsongs.max}")
-
-        if info.subsongs:
-            subsong_data = Subsong()
-            subsong_data.cur = info.subsongs.cur
-            subsong_data.min = info.subsongs.min
-            subsong_data.max = info.subsongs.max
-            # subsong.def_ = info.subsongs.def
-
-            song.subsong_data = subsong_data
-
-        return song
-
-    def init_play(self, filename, subsong):
-        # print("Start playing " + filename)
-
-        self.state = libuade.uade_new_state(None)
-
-        if not self.state:
-            raise Exception("uade_state is NULL")
-
-        samplerate = libuade.uade_get_sampling_rate(self.state)
-
-        self.load_song(filename, subsong)
-        # libuade.uade_next_subsong(self.state)
-
-        format = ao_sample_format(
-            2 * 8, libuade.uade_get_sampling_rate(self.state), 2, 4)
-
-        driver = libao.ao_default_driver_id()
-
-        self.libao_device = libao.ao_open_live(
-            driver, byref(format), None)
-
-        self.buf_len = 4096
-        self.buf = (c_char * self.buf_len)()
-
-        # total = np.array([])
-        # total = np.zeros(4096 * 1024, dtype=c_int16)
-
-    def play(self):
-        nbytes = libuade.uade_read(self.buf, self.buf_len, self.state)
-
-        # pa = cast(buf, POINTER(c_char * buf_len))
-        # a = np.frombuffer(pa.contents, dtype=np.int16)
-
-        if nbytes < 0:
-            raise Exception("Playback error")
-        # elif nbytes == 0:
-            # self.song_end.emit()
-            # raise EOFError("Song end")
-
-        # total = np.append(total, a)
-
-        notification_song_end = uade_notification_song_end(
-            happy=0, stopnow=0, subsong=0, subsongbytes=0, reason=None)
-
-        notification_union = uade_notification_union(
-            msg=None, song_end=notification_song_end)
-
-        notification = uade_notification(
-            type=0, uade_notification_union=notification_union)
-
-        class UADE_NOTIFICATION_TYPE(IntEnum):
-            UADE_NOTIFICATION_MESSAGE = 0
-            UADE_NOTIFICATION_SONG_END = 1
-
-        if libuade.uade_read_notification(notification, self.state) == 1:
-            if notification.type == UADE_NOTIFICATION_TYPE.UADE_NOTIFICATION_MESSAGE:
-                print("uade notification: information")
-            elif notification.type == UADE_NOTIFICATION_TYPE.UADE_NOTIFICATION_SONG_END:
-                self.song_end.emit()
-
-                if notification_union.msg:
-                    print("uade_notification.msg: " +
-                          str(notification_union.msg))
-
-                if notification_song_end.happy != 0:
-                    print("song_end.happy: " + str(notification_song_end.happy))
-
-                if notification_song_end.stopnow != 0:
-                    print("song_end.stopnow: " +
-                          str(notification_song_end.stopnow))
-
-                if notification_song_end.subsong != 0:
-                    print("song_end.subsong: " +
-                          str(notification_song_end.subsong))
-
-                if notification_song_end.subsongbytes != 0:
-                    print("song_end.subsongbytes: " +
-                          str(notification_song_end.subsongbytes))
-
-                if notification_song_end.reason:
-                    print("song_end.reason: " + notification_song_end.reason)
-
-            libuade.uade_cleanup_notification(notification)
-
-        if not libao.ao_play(self.libao_device, self.buf, nbytes):
-            return False
-
-        return True
-
-        # cast(buf2, POINTER(c_char))
-
-        # sd.play(total, 44100)
-        # sd.wait()
-
-        # for x in range(100):
-
-        #     pa = cast(buf2, POINTER(c_char * 4096))
-        #     a = np.frombuffer(pa.contents, dtype=np.int16)
-
-        # if x >= 6:
-        #     for i in range(16):
-        #         print(a[i], " - ", format(a[i], '#016b'))
-        # total = np.append(total, a)
-
-        # def callback(outdata, frames, time, status):
-        #     data = wf.buffer_read(frames, dtype='float32')
-        #     if len(data) <= 0:
-        #         raise sd.CallbackAbort
-        #     if len(outdata) > len(data):
-        #         raise sd.CallbackAbort  # wrong obviously
-        #     outdata[:] = data
-
-        # with sd.RawOutputStream(channels=wf.channels,
-        #                         callback=callback) as stream:
-        #     while stream.active:
-        #         continue
-    def stop(self):
-        # print("Stop playing")
-
-        if libuade.uade_stop(self.state) != 0:
-            print("uade_stop error")
-
-        libuade.uade_cleanup_state(self.state)
-
-        if libao.ao_close(self.libao_device) != 1:
-            print("ao_close error")
-
-        self.state = 0
-
-
-uade = Pyuade()
+uade = Uade()
 
 
 class PlayerThread(QThread):
@@ -233,11 +33,11 @@ class PlayerThread(QThread):
 
     def run(self):
         debugpy.debug_this_thread()
-        uade.init_play(self.current_filename, self.current_subsong)
+        uade.prepare_play(self.current_filename, self.current_subsong)
 
         while self.running:
             try:
-                uade.play()
+                uade.play_threaded()
             except EOFError:
                 self.running = False
             except Exception:
@@ -246,12 +46,12 @@ class PlayerThread(QThread):
         uade.stop()
 
 
-class Playlist:
-    def __init__(self):
-        pass
+# class Playlist:
+#     def __init__(self):
+#         pass
 
-    def insert_song():
-        pass
+#     def insert_song():
+#         pass
 
 
 class TREEVIEWCOL(IntEnum):
@@ -287,14 +87,35 @@ class MyWidget(QtWidgets.QMainWindow):
         self.read_config()
 
         uade.song_end.connect(self.item_finished)
+        uade.current_bytes_update.connect(self.timeline_update)
+        self.timeline.sliderMoved.connect(uade.position_changed)
+
+        # info = (c_char * 16384)()
+
+        # i = libuade.uade_song_info(info, sizeof(info), str.encode("/mnt/Daten/Musik/Retro/Games/Benefactor/pru2.ingame-1"), 0)
+
+        # print(info.value.decode())
+
+        # i = libuade.uade_song_info(info, sizeof(info), str.encode("/mnt/Daten/Musik/Retro/Games/Benefactor/pru2.ingame-1"), 1)
+
+        # print(info.value.decode())
+
+        # i = libuade.uade_song_info(info, sizeof(info), str.encode("/mnt/Daten/Musik/Retro/Games/Benefactor/pru2.ingame-1"), 2)
+
+        # print(info.value.decode())
+
+        # song = uade.scan_song(
+        #     "/mnt/Daten/Musik/Retro/Games/pinball dreams - beatbox.mod")
+
+        # self.load_song(song)
 
     def read_config(self):
         # Read playlist
 
-        if exists(user_config_dir(self.appname) + '/playlist'):
-            with open(user_config_dir(self.appname) + '/playlist', 'r') as playlist:
-                for line in playlist:
-                    self.load_file(line.rstrip("\n"))
+        # if exists(user_config_dir(self.appname) + '/playlist'):
+        #     with open(user_config_dir(self.appname) + '/playlist', 'r') as playlist:
+        #         for line in playlist:
+        #             self.load_file(line.rstrip("\n"))
 
         # Read config
 
@@ -343,27 +164,23 @@ class MyWidget(QtWidgets.QMainWindow):
 
         # Write playlist
 
-        filenames = []
+        # filenames = []
 
-        for r in range(self.model.rowCount()):
-            index = self.model.index(r, 4)
-            filenames.append(self.model.data(index))
+        # for r in range(self.model.rowCount()):
+        #     index = self.model.index(r, 4)
+        #     filenames.append(self.model.data(index))
 
-            # Ignore subsongs, only save one filename per song
-            filenames = list(dict.fromkeys(filenames))
+        #     # Ignore subsongs, only save one filename per song
+        #     filenames = list(dict.fromkeys(filenames))
 
-        with open(user_config_dir(self.appname) + '/playlist', 'w') as playlist:
-            for line in filenames:
-                playlist.write(line + "\n")
+        # with open(user_config_dir(self.appname) + '/playlist', 'w') as playlist:
+        #     for line in filenames:
+        #         playlist.write(line + "\n")
 
     def closeEvent(self, event):
         self.write_config()
 
     def setup_actions(self):
-        toolbar = QToolBar("Toolbar")
-        toolbar.setIconSize(QSize(16, 16))
-        self.addToolBar(toolbar)
-
         self.load_action = QAction("Load", self)
         self.load_action.setStatusTip("Load")
         self.load_action.triggered.connect(self.load_clicked)
@@ -372,29 +189,43 @@ class MyWidget(QtWidgets.QMainWindow):
         self.quit_action.setStatusTip("Quit")
         self.quit_action.triggered.connect(self.quit_clicked)
 
-        play_action = QAction(QIcon("play.svg"), "Play", self)
-        play_action.setStatusTip("Play")
-        play_action.triggered.connect(self.play_clicked)
-        toolbar.addAction(play_action)
+        self.play_action = QAction(QIcon("play.svg"), "Play", self)
+        self.play_action.setStatusTip("Play")
+        self.play_action.triggered.connect(self.play_clicked)
 
-        stop_action = QAction(QIcon("stop.svg"), "Stop", self)
-        stop_action.setStatusTip("Stop")
-        stop_action.triggered.connect(self.stop_clicked)
-        toolbar.addAction(stop_action)
+        self.stop_action = QAction(QIcon("stop.svg"), "Stop", self)
+        self.stop_action.setStatusTip("Stop")
+        self.stop_action.triggered.connect(self.stop_clicked)
 
-        prev_action = QAction(QIcon("prev.svg"), "Prev", self)
-        prev_action.setStatusTip("Prev")
-        prev_action.triggered.connect(self.prev_clicked)
-        toolbar.addAction(prev_action)
+        self.prev_action = QAction(QIcon("prev.svg"), "Prev", self)
+        self.prev_action.setStatusTip("Prev")
+        self.prev_action.triggered.connect(self.prev_clicked)
 
-        next_action = QAction(QIcon("next.svg"), "Next", self)
-        next_action.setStatusTip("Next")
-        next_action.triggered.connect(self.next_clicked)
-        toolbar.addAction(next_action)
+        self.next_action = QAction(QIcon("next.svg"), "Next", self)
+        self.next_action.setStatusTip("Next")
+        self.next_action.triggered.connect(self.next_clicked)
 
         self.delete_action = QAction("Delete", self)
         self.delete_action.setStatusTip("Delete")
         self.delete_action.triggered.connect(self.delete_clicked)
+
+    def setup_toolbar(self):
+        toolbar = QToolBar("Toolbar")
+        toolbar.setIconSize(QSize(16, 16))
+        self.addToolBar(toolbar)
+
+        toolbar.addAction(self.play_action)
+        toolbar.addAction(self.stop_action)
+        toolbar.addAction(self.prev_action)
+        toolbar.addAction(self.next_action)
+
+        self.timeline = QSlider(QtCore.Qt.Horizontal, self)
+        self.timeline.setRange(0, 100)
+        self.timeline.setFocusPolicy(QtCore.Qt.NoFocus)
+        self.timeline.setPageStep(5)
+        # timeline.setStyleSheet("QSlider::handle:horizontal {background-color: red;}")
+
+        toolbar.addWidget(self.timeline)
 
     def setup_menu(self):
         menu = self.menuBar()
@@ -437,6 +268,7 @@ class MyWidget(QtWidgets.QMainWindow):
         self.tree.customContextMenuRequested.connect(self.openMenu)
 
         self.setup_actions()
+        self.setup_toolbar()
         self.setup_menu()
 
         self.setStatusBar(QStatusBar(self))
@@ -450,9 +282,11 @@ class MyWidget(QtWidgets.QMainWindow):
     def delete_selected_items(self):
         while self.tree.selectionModel().selectedRows(0):
             idx = self.tree.selectionModel().selectedRows(0)[0]
-            if idx.row() == self.current_row:
-                self.current_row = self.tree.indexBelow(
-                    self.current_row)
+
+            #TODO: rebuild
+            # if idx.row() == self.current_row:
+            #     self.current_row = self.tree.indexBelow(
+            #         self.current_row)
 
             self.model.removeRow(idx.row(), idx.parent())
 
@@ -473,14 +307,30 @@ class MyWidget(QtWidgets.QMainWindow):
     def play(self, row: int):
         self.stop()
 
-        self.play_file_thread(self.model.itemFromIndex(self.model.index(row, TREEVIEWCOL.PATH)).text(
-        ), int(self.model.itemFromIndex(self.model.index(row, TREEVIEWCOL.SUBSONG)).text()))
+        filename = self.model.itemFromIndex(
+            self.model.index(row, TREEVIEWCOL.PATH)).text()
+        subsong = int(self.model.itemFromIndex(
+            self.model.index(row, TREEVIEWCOL.SUBSONG)).text())
+
+        self.play_file_thread(filename, subsong)
         self.current_row = row
+
+        notification = Notify()
+        notification.title = "Now playing"
+        notification.message = filename
+        notification.send(block=False)
 
         # Select playing track
 
         self.tree.selectionModel().select(self.model.index(self.current_row, 0),
                                           QItemSelectionModel.SelectCurrent | QItemSelectionModel.Rows)
+
+        # self.timeline.setMaximum(self.model.itemFromIndex(self.model.index(row, TREEVIEWCOL.DURATION)))
+
+        subsong = self.model.itemFromIndex(self.model.index(self.current_row, 0)).data(QtCore.Qt.UserRole)
+
+        self.timeline.setMaximum(subsong.bytes)
+        print(self.timeline.maximum())
 
     def play_file_thread(self, filename: str, subsong: int):
         # Play filename saved in current item
@@ -505,34 +355,34 @@ class MyWidget(QtWidgets.QMainWindow):
         if self.current_row > 0:
             self.play(self.current_row - 1)
 
-    def load_file(self, filename):
-        try:
-            song = uade.load_song(filename, 0)
-        except Exception:
-            print("Loading file failed: ", filename)
-        else:
-            song.filename = filename
+    def load_song(self, song):
+        # Add all subsongs (including main song)
 
-            # Add subsongs as playable songs
+        for s in range(0, len(song.subsongs)):
+            tree_rows = [None] * 6
 
-            subsongs = 1
+            tree_rows[TREEVIEWCOL.FILENAME] = QStandardItem(
+                ntpath.basename(song.filename))
+            # Store subsong in filename column for every row for future use
+            tree_rows[TREEVIEWCOL.FILENAME].setData(
+                song.subsongs[s], QtCore.Qt.UserRole)
+            tree_rows[TREEVIEWCOL.SONGNAME] = QStandardItem(song.modulename)
+            tree_rows[TREEVIEWCOL.DURATION] = QStandardItem(
+                str(datetime.timedelta(seconds=song.subsongs[s].bytes/176400)).split(".")[0])
+            tree_rows[TREEVIEWCOL.PLAYER] = QStandardItem(song.playername)
+            tree_rows[TREEVIEWCOL.PATH] = QStandardItem(song.filename)
+            tree_rows[TREEVIEWCOL.SUBSONG] = QStandardItem(str(s))
 
-            if song.subsong_data.max > 1:
-                subsongs = song.subsong_data.max
+            self.model.appendRow(tree_rows)
 
-            for subsong in range(song.subsong_data.cur, subsongs + 1):
-                tree_rows = [None] * 6
+            # print(self.model.itemFromIndex(self.model.index(0, 0)).data(QtCore.Qt.UserRole))
 
-                tree_rows[TREEVIEWCOL.FILENAME] = QStandardItem(
-                    ntpath.basename(song.filename))
-                tree_rows[TREEVIEWCOL.SONGNAME] = QStandardItem(song.name)
-                tree_rows[TREEVIEWCOL.DURATION] = QStandardItem(
-                    str(song.duration))
-                tree_rows[TREEVIEWCOL.PLAYER] = QStandardItem(song.player)
-                tree_rows[TREEVIEWCOL.PATH] = QStandardItem(song.filename)
-                tree_rows[TREEVIEWCOL.SUBSONG] = QStandardItem(str(subsong))
+    # @ QtCore.Slot()
+    # def timeline_changed(self, bytes):
 
-                self.model.appendRow(tree_rows)
+    @ QtCore.Slot()
+    def timeline_update(self, bytes):
+        self.timeline.setValue(bytes)
 
     @ QtCore.Slot()
     def delete_clicked(self):
@@ -551,7 +401,8 @@ class MyWidget(QtWidgets.QMainWindow):
 
         if filenames:
             for filename in filenames:
-                self.load_file(filename)
+                # self.load_file(filename)
+                self.load_song(uade.scan_song(filename))
 
             self.config["files"]["last_open_path"] = os.path.dirname(
                 os.path.abspath(filename))
@@ -576,7 +427,8 @@ class MyWidget(QtWidgets.QMainWindow):
     @ QtCore.Slot()
     def item_finished(self):
         # print("Playing finished")
-        self.play_next_item()
+        # self.play_next_item()
+        pass
 
 
 if __name__ == "__main__":
