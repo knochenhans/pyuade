@@ -29,19 +29,21 @@ class PlayerThread(QThread):
 
     def __init__(self, parent=None):
         QThread.__init__(self, parent)
-        self.running = True
+        self.running = False
+        self.paused = False
 
     def run(self):
         debugpy.debug_this_thread()
         uade.prepare_play(self.current_filename, self.current_subsong)
 
         while self.running:
-            try:
-                uade.play_threaded()
-            except EOFError:
-                self.running = False
-            except Exception:
-                self.running = False
+            if not self.paused:
+                try:
+                    uade.play_threaded()
+                except EOFError:
+                    self.running = False
+                except Exception:
+                    self.running = False
 
         uade.stop()
 
@@ -64,11 +66,6 @@ class TREEVIEWCOL(IntEnum):
 
 
 class MyWidget(QtWidgets.QMainWindow):
-    def next_track(self):
-        if self.current_row < self.model.rowCount():
-            self.current_row = self.model.index(
-                self.current_row + 1, 4)
-
     def __init__(self):
         super().__init__()
 
@@ -79,7 +76,6 @@ class MyWidget(QtWidgets.QMainWindow):
         self.appauthor = "Andre Jonas"
 
         self.config = configparser.ConfigParser()
-        self.current_row: int = 0
 
         self.read_config()
 
@@ -88,9 +84,11 @@ class MyWidget(QtWidgets.QMainWindow):
         self.timeline.sliderPressed.connect(self.timeline_pressed)
         self.timeline.sliderReleased.connect(self.timeline_released)
 
-        self.current_row: QModelIndex
-        self.playing: bool = False
+        self.current_row: int = 0
+        self.current_index: QModelIndex
         self.timeline_tracking: bool = True
+
+        self.current_song = QItemSelectionModel(self.model)
 
     def read_config(self):
         # Read playlist
@@ -284,9 +282,9 @@ class MyWidget(QtWidgets.QMainWindow):
             if event.key() == QtCore.Qt.Key_Delete:
                 self.delete_selected_items()
 
-    @ QtCore.Slot()
-    def test_clicked(self):
-        uade.seek(self.timeline.value() * 2)
+    # @ QtCore.Slot()
+    # def test_clicked(self):
+    #     uade.seek(self.timeline.value() * 2)
 
     @ QtCore.Slot()
     def quit_clicked(self):
@@ -298,33 +296,37 @@ class MyWidget(QtWidgets.QMainWindow):
         self.play(self.tree.selectedIndexes()[0].row())
 
     def play(self, row: int):
-        self.stop()
+        # self.stop()
 
-        filename = self.model.itemFromIndex(
-            self.model.index(row, TREEVIEWCOL.PATH)).text()
-        subsong = int(self.model.itemFromIndex(
-            self.model.index(row, TREEVIEWCOL.SUBSONG)).text())
+        if self.thread.running:
+            pass
+        else:
+            filename = self.model.itemFromIndex(
+                self.model.index(row, TREEVIEWCOL.PATH)).text()
+            subsong = int(self.model.itemFromIndex(
+                self.model.index(row, TREEVIEWCOL.SUBSONG)).text())
 
-        self.play_file_thread(filename, subsong)
-        self.current_row = row
+            self.play_file_thread(filename, subsong)
+            self.current_row = row
 
-        notification = Notify()
-        notification.title = "Now playing"
-        notification.message = filename
-        notification.send(block=False)
+            notification = Notify()
+            notification.title = "Now playing"
+            notification.message = filename
+            notification.send(block=False)
 
-        # Select playing track
+            # Select playing track
 
-        self.tree.selectionModel().select(self.model.index(self.current_row, 0),
-                                          QItemSelectionModel.SelectCurrent | QItemSelectionModel.Rows)
+            self.tree.selectionModel().select(self.model.index(self.current_row, 0),
+                                              QItemSelectionModel.SelectCurrent | QItemSelectionModel.Rows)
 
-        # self.timeline.setMaximum(self.model.itemFromIndex(self.model.index(row, TREEVIEWCOL.DURATION)))
+            subsong = self.model.itemFromIndex(self.model.index(
+                self.current_row, 0)).data(QtCore.Qt.UserRole)
 
-        subsong = self.model.itemFromIndex(self.model.index(
-            self.current_row, 0)).data(QtCore.Qt.UserRole)
+            self.timeline.setMaximum(subsong.bytes)
 
-        self.timeline.setMaximum(subsong.bytes)
-        print(self.timeline.maximum())
+            # Set current track (for pausing)
+            self.current_song.setCurrentIndex(self.model.index(
+                self.current_row, 0), QItemSelectionModel.SelectCurrent)
 
     def play_file_thread(self, filename: str, subsong: int):
         # Play filename saved in current item
@@ -332,17 +334,19 @@ class MyWidget(QtWidgets.QMainWindow):
         self.thread.current_subsong = subsong
         self.thread.start()
         self.thread.running = True
-        self.playing = True
 
     def stop(self):
         self.thread.running = False
         self.thread.quit()
         self.thread.wait()
+        self.timeline.setSliderPosition(0)
 
     def play_next_item(self):
         # current_index actually lists all columns, so for now just take the first col
         if self.current_row < self.model.rowCount(self.tree.rootIndex()) - 1:
             self.play(self.current_row + 1)
+        else:
+            self.stop()
 
     def play_previous_item(self):
         # current_index actually lists all columns, so for now just take the first col
@@ -369,8 +373,6 @@ class MyWidget(QtWidgets.QMainWindow):
 
             self.model.appendRow(tree_rows)
 
-            # print(self.model.itemFromIndex(self.model.index(0, 0)).data(QtCore.Qt.UserRole))
-
     def load_file(self, filename):
         self.load_song(uade.scan_song(filename))
 
@@ -382,7 +384,6 @@ class MyWidget(QtWidgets.QMainWindow):
     @ QtCore.Slot()
     def timeline_pressed(self):
         self.timeline_tracking = False
-        print("press")
 
     @ QtCore.Slot()
     def timeline_released(self):
@@ -415,7 +416,10 @@ class MyWidget(QtWidgets.QMainWindow):
     @ QtCore.Slot()
     def play_clicked(self):
         if self.model.rowCount(self.tree.rootIndex()) > 0:
-            self.play(self.current_row)
+            if self.thread.paused:
+                self.thread.paused = False
+            else:
+                self.thread.paused = True
 
     @ QtCore.Slot()
     def stop_clicked(self):
@@ -431,9 +435,9 @@ class MyWidget(QtWidgets.QMainWindow):
 
     @ QtCore.Slot()
     def item_finished(self):
-        # print("Playing finished")
+        print("Playing finished")
+        self.stop()
         # self.play_next_item()
-        pass
 
 
 if __name__ == "__main__":

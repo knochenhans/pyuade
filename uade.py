@@ -271,12 +271,11 @@ class Uade(QObject):
 
         # total = np.append(total, a)
 
-        # self.check_notifications()
-
         # Only for RMC songs
         # print(libuade.uade_get_time_position(1, self.state))
 
         self.current_bytes_update.emit(songinfo.subsongbytes)
+        self.check_notifications()
 
         if not libao.ao_play(self.libao_device, self.buf, nbytes):
             return False
