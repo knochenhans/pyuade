@@ -4,18 +4,21 @@ from genericpath import exists
 import os
 import sys
 import ntpath
-import numpy as np
-import sounddevice as sd
-import soundfile as sf
+# import numpy as np
+# import sounddevice as sd
+# import soundfile as sf
 from PySide6 import QtCore, QtWidgets
-from PySide6.QtCore import QCoreApplication, QObject, QSettings, QSize, QThread, QAbstractItemModel, QModelIndex, QItemSelectionModel, Signal
-from PySide6.QtWidgets import QAbstractItemView, QFileDialog, QListWidgetItem, QMenu, QSizePolicy, QSlider, QStatusBar, QToolBar, QTreeView, QWidget
+from PySide6.QtCore import QCoreApplication, QEvent, QSize, QThread, QModelIndex, QItemSelectionModel
+from PySide6.QtWidgets import QAbstractItemView, QFileDialog, QMenu, QProgressDialog, QSlider, QStatusBar, QToolBar, QTreeView
 from PySide6.QtGui import QAction, QIcon, QStandardItem, QStandardItemModel
 import debugpy
 import configparser
 from appdirs import *
 from pathlib import Path
+from isort import file
 from notifypy import Notify
+import typing
+import json
 
 from ctypes_functions import *
 from uade import *
@@ -24,17 +27,18 @@ uade = Uade()
 
 
 class PlayerThread(QThread):
-    current_filename: str = []
-    current_subsong: int = -1
+    # current_filename: str = ""
+    current_subsong_nr: int = -1
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None) -> None:
         QThread.__init__(self, parent)
         self.running = False
         self.paused = False
+        self.current_song: SongFile
 
     def run(self):
         debugpy.debug_this_thread()
-        uade.prepare_play(self.current_filename, self.current_subsong)
+        uade.prepare_play(self.current_song, self.current_subsong_nr)
 
         while self.running:
             if not self.paused:
@@ -48,14 +52,6 @@ class PlayerThread(QThread):
         uade.stop()
 
 
-# class Playlist:
-#     def __init__(self):
-#         pass
-
-#     def insert_song():
-#         pass
-
-
 class TREEVIEWCOL(IntEnum):
     FILENAME = 0
     SONGNAME = 1
@@ -66,7 +62,7 @@ class TREEVIEWCOL(IntEnum):
 
 
 class MyWidget(QtWidgets.QMainWindow):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
 
         self.setup_gui()
@@ -88,15 +84,18 @@ class MyWidget(QtWidgets.QMainWindow):
         self.current_index: QModelIndex
         self.timeline_tracking: bool = True
 
-        self.current_song = QItemSelectionModel(self.model)
+        self.current_selection = QItemSelectionModel(self.model)
+        self.current_song: SongFile
 
-    def read_config(self):
+    def read_config(self) -> None:
+
         # Read playlist
 
         if exists(user_config_dir(self.appname) + '/playlist'):
             with open(user_config_dir(self.appname) + '/playlist', 'r') as playlist:
                 for line in playlist:
-                    self.load_file(line.rstrip("\n"))
+                    # self.load_file(line.rstrip("\n"))
+                    pass
 
         # Read config
 
@@ -120,7 +119,7 @@ class MyWidget(QtWidgets.QMainWindow):
                     self.tree.header().resizeSection(
                         c, int(self.config["window"]["col" + str(c) + "_width"]))
 
-    def write_config(self):
+    def write_config(self) -> None:
         # Write config
 
         self.config["window"]["width"] = str(self.geometry().width())
@@ -145,10 +144,10 @@ class MyWidget(QtWidgets.QMainWindow):
 
         # Write playlist
 
-        filenames = []
+        filenames: list[str] = []
 
         for r in range(self.model.rowCount()):
-            index = self.model.index(r, 4)
+            index: QModelIndex = self.model.index(r, 4)
             filenames.append(self.model.data(index))
 
             # Ignore subsongs, only save one filename per song
@@ -156,9 +155,37 @@ class MyWidget(QtWidgets.QMainWindow):
 
         with open(user_config_dir(self.appname) + '/playlist', 'w') as playlist:
             for line in filenames:
-                playlist.write(line + "\n")
+                # playlist.write(line + "\n")
+                pass
 
-    def setup_actions(self):
+        # json_list: list[list[str]] = []
+
+        # for r in range(self.model.rowCount()):
+        #     row: list[str] = []
+
+        #     for c in range(self.model.columnCount()):
+        #         index: QModelIndex = self.model.index(r, c)
+
+        #         row.append(self.model.data(index))
+
+        #     if row:
+        #         json_list.append(row)
+
+        # json_file = json.dumps(json_list, sort_keys=True, indent=4)
+
+        # print(json_file)
+
+        # json_in = json.loads(json_file)
+
+        for r in range(self.model.rowCount()):
+            song: SongFile = self.model.itemFromIndex(
+                self.model.index(r, 0)).data(QtCore.Qt.UserRole)
+            subsong_nr: int = int(self.model.itemFromIndex(
+                self.model.index(r, TREEVIEWCOL.SUBSONG)).text())
+
+            print(json.dumps(song.toJSON(), sort_keys=True, indent=4))
+
+    def setup_actions(self) -> None:
         self.load_action = QAction("Load", self)
         self.load_action.setStatusTip("Load")
         self.load_action.triggered.connect(self.load_clicked)
@@ -191,8 +218,8 @@ class MyWidget(QtWidgets.QMainWindow):
         # self.test_action.setStatusTip("Test")
         # self.test_action.triggered.connect(self.test_clicked)
 
-    def setup_toolbar(self):
-        toolbar = QToolBar("Toolbar")
+    def setup_toolbar(self) -> None:
+        toolbar: QToolBar = QToolBar("Toolbar")
         toolbar.setIconSize(QSize(16, 16))
         self.addToolBar(toolbar)
 
@@ -211,10 +238,10 @@ class MyWidget(QtWidgets.QMainWindow):
 
         toolbar.addWidget(self.timeline)
 
-    def setup_menu(self):
+    def setup_menu(self) -> None:
         menu = self.menuBar()
 
-        file_menu = menu.addMenu("&File")
+        file_menu: QMenu = menu.addMenu("&File")
         file_menu.addAction(self.load_action)
         file_menu.addSeparator()
         file_menu.addAction(self.quit_action)
@@ -222,7 +249,7 @@ class MyWidget(QtWidgets.QMainWindow):
         edit_menu = menu.addMenu("&Edit")
         edit_menu.addAction(self.delete_action)
 
-    def setup_gui(self):
+    def setup_gui(self) -> None:
 
         # Tree
 
@@ -231,13 +258,22 @@ class MyWidget(QtWidgets.QMainWindow):
         self.tree = QTreeView()
         self.model = QStandardItemModel(0, 4)
 
-        labels = [None] * 6
-        labels[TREEVIEWCOL.FILENAME] = "Filename"
-        labels[TREEVIEWCOL.SONGNAME] = "Songname"
-        labels[TREEVIEWCOL.DURATION] = "Duration"
-        labels[TREEVIEWCOL.PLAYER] = "Player"
-        labels[TREEVIEWCOL.PATH] = "Path"
-        labels[TREEVIEWCOL.SUBSONG] = "Subsong"
+        labels: list[str] = []
+
+        for col in TREEVIEWCOL:
+            match col:
+                case TREEVIEWCOL.FILENAME:
+                    labels.append("Filename")
+                case TREEVIEWCOL.SONGNAME:
+                    labels.append("Songname")
+                case TREEVIEWCOL.DURATION:
+                    labels.append("Duration")
+                case TREEVIEWCOL.PLAYER:
+                    labels.append("Player")
+                case TREEVIEWCOL.PATH:
+                    labels.append("Path")
+                case TREEVIEWCOL.SUBSONG:
+                    labels.append("Subsong")
 
         self.model.setHorizontalHeaderLabels(labels)
         self.tree.setModel(self.model)
@@ -247,9 +283,9 @@ class MyWidget(QtWidgets.QMainWindow):
         self.tree.setSelectionMode(QTreeView.ExtendedSelection)
         self.tree.setEditTriggers(QAbstractItemView.NoEditTriggers)
 
-        self.tree.doubleClicked.connect(self.item_doubleClicked)
+        self.tree.doubleClicked.connect(self.item_double_clicked)
         self.tree.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
-        self.tree.customContextMenuRequested.connect(self.openMenu)
+        self.tree.customContextMenuRequested.connect(self.open_menu)
 
         self.setup_actions()
         self.setup_toolbar()
@@ -257,10 +293,10 @@ class MyWidget(QtWidgets.QMainWindow):
 
         self.setStatusBar(QStatusBar(self))
 
-    def closeEvent(self, event):
+    def closeEvent(self, event: QEvent):
         self.write_config()
 
-    def openMenu(self, position):
+    def open_menu(self, position: int) -> None:
         menu = QMenu()
         menu.addAction(self.delete_action)
 
@@ -268,7 +304,7 @@ class MyWidget(QtWidgets.QMainWindow):
 
     def delete_selected_items(self):
         while self.tree.selectionModel().selectedRows(0):
-            idx = self.tree.selectionModel().selectedRows(0)[0]
+            idx: QModelIndex = self.tree.selectionModel().selectedRows(0)[0]
 
             #TODO: rebuild
             # if idx.row() == self.current_row:
@@ -277,7 +313,7 @@ class MyWidget(QtWidgets.QMainWindow):
 
             self.model.removeRow(idx.row(), idx.parent())
 
-    def keyPressEvent(self, event):
+    def keyPressEvent(self, event: QEvent):
         if self.tree.selectionModel().selectedRows(0):
             if event.key() == QtCore.Qt.Key_Delete:
                 self.delete_selected_items()
@@ -292,19 +328,20 @@ class MyWidget(QtWidgets.QMainWindow):
         QCoreApplication.quit()
 
     @ QtCore.Slot()
-    def item_doubleClicked(self, index):
+    def item_double_clicked(self, index: QModelIndex):
+
         self.play(self.tree.selectedIndexes()[0].row())
 
     def play(self, row: int):
         if self.thread.running:
             self.stop()
 
-        filename = self.model.itemFromIndex(
-            self.model.index(row, TREEVIEWCOL.PATH)).text()
-        subsong = int(self.model.itemFromIndex(
+        song: SongFile = self.model.itemFromIndex(self.model.index(
+            self.current_row, 0)).data(QtCore.Qt.UserRole)
+        subsong_nr: int = int(self.model.itemFromIndex(
             self.model.index(row, TREEVIEWCOL.SUBSONG)).text())
 
-        self.play_file_thread(filename, subsong)
+        self.play_file_thread(song, subsong_nr)
         self.current_row = row
 
         # Select playing track
@@ -312,43 +349,41 @@ class MyWidget(QtWidgets.QMainWindow):
         self.tree.selectionModel().select(self.model.index(self.current_row, 0),
                                           QItemSelectionModel.SelectCurrent | QItemSelectionModel.Rows)
 
-        subsong = self.model.itemFromIndex(self.model.index(
-            self.current_row, 0)).data(QtCore.Qt.UserRole)
-
-        self.timeline.setMaximum(subsong.bytes)
+        self.timeline.setMaximum(song.subsongs[subsong_nr].bytes)
 
         # Set current track (for pausing)
 
-        self.current_song.setCurrentIndex(self.model.index(
+        self.current_selection.setCurrentIndex(self.model.index(
             self.current_row, 0), QItemSelectionModel.SelectCurrent)
+        self.current_song = song
 
         # Notification
 
         notification = Notify()
         notification.title = "Now playing"
-        notification.message = filename
+        notification.message = song.filename
         notification.icon = "play.svg"
         notification.send(block=False)
 
-        print("Now playing " + filename)
+        print("Now playing " + song.filename)
 
         self.play_action.setIcon(QIcon("pause.svg"))
 
-    def play_file_thread(self, filename: str, subsong: int):
-        self.thread.current_filename = filename
-        self.thread.current_subsong = subsong
+    def play_file_thread(self, song: SongFile, subsong_nr: int) -> None:
+        self.thread.current_song = song
+        self.thread.current_subsong_nr = subsong_nr
         self.thread.start()
         self.thread.running = True
 
-    def stop(self):
+    def stop(self) -> None:
         self.thread.running = False
         self.thread.quit()
         self.thread.wait()
         self.timeline.setSliderPosition(0)
 
-    def play_next_item(self):
+    def play_next_item(self) -> None:
 
-        index = self.current_song.currentIndex()
+        index = self.current_selection.currentIndex()
 
         row = index.row()
 
@@ -356,36 +391,45 @@ class MyWidget(QtWidgets.QMainWindow):
         if row < self.model.rowCount(self.tree.rootIndex()) - 1:
             self.play(row + 1)
 
-    def play_previous_item(self):
+    def play_previous_item(self) -> None:
         # current_index actually lists all columns, so for now just take the first col
         if self.current_row > 0:
             self.play(self.current_row - 1)
 
-    def load_song(self, song):
+    def load_song(self, song: SongFile) -> None:
         # Add all subsongs (including main song)
 
         for s in range(0, len(song.subsongs)):
-            tree_rows = [None] * 6
+            tree_rows: list[QStandardItem] = []
 
-            tree_rows[TREEVIEWCOL.FILENAME] = QStandardItem(
-                ntpath.basename(song.filename))
-            # Store subsong in filename column for every row for future use
-            tree_rows[TREEVIEWCOL.FILENAME].setData(
-                song.subsongs[s], QtCore.Qt.UserRole)
-            tree_rows[TREEVIEWCOL.SONGNAME] = QStandardItem(song.modulename)
-            tree_rows[TREEVIEWCOL.DURATION] = QStandardItem(
-                str(datetime.timedelta(seconds=song.subsongs[s].bytes/176400)).split(".")[0])
-            tree_rows[TREEVIEWCOL.PLAYER] = QStandardItem(song.playername)
-            tree_rows[TREEVIEWCOL.PATH] = QStandardItem(song.filename)
-            tree_rows[TREEVIEWCOL.SUBSONG] = QStandardItem(str(s))
+            for col in TREEVIEWCOL:
+                match col:
+                    case TREEVIEWCOL.FILENAME:
+                        item = QStandardItem(ntpath.basename(song.filename))
+
+                        # Store song in filename column for every row for future use
+                        item.setData(song, QtCore.Qt.UserRole)
+                        tree_rows.append(item)
+                    case TREEVIEWCOL.SONGNAME:
+                        tree_rows.append(QStandardItem(song.modulename))
+                    case TREEVIEWCOL.DURATION:
+                        tree_rows.append(QStandardItem(str(datetime.timedelta(
+                            seconds=song.subsongs[s].bytes/176400)).split(".")[0]))
+                    case TREEVIEWCOL.PLAYER:
+                        tree_rows.append(QStandardItem(song.playername))
+                    case TREEVIEWCOL.PATH:
+                        tree_rows.append(QStandardItem(song.filename))
+                    case TREEVIEWCOL.SUBSONG:
+                        tree_rows.append(QStandardItem(str(s)))
 
             self.model.appendRow(tree_rows)
 
-    def load_file(self, filename):
-        self.load_song(uade.scan_song(filename))
+    def load_file(self, filename: str) -> None:
+        # self.load_song(uade.scan_song(filename))
+        song_file = uade.scan_song(filename)
 
     @ QtCore.Slot()
-    def timeline_update(self, bytes):
+    def timeline_update(self, bytes: int) -> None:
         if self.timeline_tracking:
             self.timeline.setValue(bytes)
 
@@ -414,9 +458,21 @@ class MyWidget(QtWidgets.QMainWindow):
                 self, caption="Load music file")
 
         if filenames:
-            for filename in filenames:
+            filename: str = ""
+
+            progress = QProgressDialog(
+                "Scanning files...", "Cancel", 0, len(filenames), self)
+            progress.setWindowModality(QtCore.Qt.WindowModal)
+
+            for i, filename in enumerate(filenames):
+                progress.setValue(i)
+                if progress.wasCanceled():
+                    break
+
                 # self.load_file(filename)
                 self.load_song(uade.scan_song(filename))
+
+            progress.setValue(len(filenames))
 
             self.config["files"]["last_open_path"] = os.path.dirname(
                 os.path.abspath(filename))

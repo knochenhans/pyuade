@@ -2,39 +2,49 @@ import datetime
 from PySide6.QtCore import QObject, Signal
 from PySide6 import QtCore
 from ctypes import *
+from PySide6.QtWidgets import QProgressDialog
 from ctypes_functions import *
+import json
 
-
-class Subsong_data():
-    cur: int = 0
-    min: int = 0
-    max: int = 0
-    def_: int = 0
+# Subsong of a song file
 
 
 class Subsong():
-    nr: int = 0
-    bytes: int = 0
+    def __init__(self) -> None:
+        self.nr: int = 0
+        self.bytes: int = 0
 
+
+# Unique reference to the actual module file, filled by data from UADE
 
 class SongFile():
-    formatname: str = ""
-    modulebytes: int = 0
-    modulefname: str = ""
-    modulemd5: str = ""
-    modulename: str = ""
-    filename: str = ""
-    playerfname: str = ""
-    playername: str = ""
-
-    custom: bool
-    content: bool
-    ext: str = ""
-
-    subsongs: Subsong
-
     def __init__(self) -> None:
-        self.subsongs = []
+        self.formatname: str = ""
+        self.modulebytes: int = 0
+        self.modulefname: str = ""
+        self.modulemd5: str = ""
+        self.modulename: str = ""
+        self.filename: str = ""
+        self.playerfname: str = ""
+        self.playername: str = ""
+        self.subsongs_min: int = 0
+
+        self.custom: bool
+        self.content: bool
+        self.ext: str = ""
+
+        self.subsongs: list[Subsong] = []
+
+    def toJSON(self):
+        return json.dumps(self, default=lambda o: o.__dict__)
+
+
+# Represents a specific subsong of a song as playable in the playlist
+
+class Song():
+    def __init__(self) -> None:
+        self.song_file: SongFile
+        self.subsong: Subsong
 
 
 class Uade(QObject):
@@ -53,7 +63,7 @@ class Uade(QObject):
 
     # Load and scan a song file
 
-    def get_event(self, state):
+    def get_event(self, state: c_void_p) -> uade_event:
         charbytes256 = (c_char * 256)()
 
         event_songend = uade_event_songend(
@@ -72,15 +82,15 @@ class Uade(QObject):
         event_union = uade_event_union(data=event_data, msg=bytes(
             charbytes1024), songend=event_songend, subsongs=si)
 
-        event = uade_event(type=0, uade_event_union=event_union)
+        event: uade_event = uade_event(type=0, uade_event_union=event_union)
 
-        e = libuade.uade_get_event(byref(event), state)
+        e: int = libuade.uade_get_event(byref(event), state)
 
         print("event type: " + str(event.type))
 
         return event
 
-    def seek(self, bytes):
+    def seek(self, bytes: int) -> None:
         songinfo: uade_song_info = libuade.uade_get_song_info(
             self.state).contents
 
@@ -88,10 +98,58 @@ class Uade(QObject):
             print("Seeking failed")
 
     @ QtCore.Slot()
-    def position_changed(self, bytes):
+    def position_changed(self, bytes: int):
         self.seek(bytes)
 
-    def scan_song(self, filename) -> SongFile:
+    def scan_subsong(self, filename: str, subsong_nr: int) -> Subsong:
+
+        self.state = libuade.uade_new_state(None)
+
+        size = c_size_t()
+
+        libuade.uade_read_file(byref(size), str.encode(filename))
+        libuade.uade_play(str.encode(filename), subsong_nr, self.state)
+
+        nbytes = 1
+
+        last_subsongbytes = 0
+
+        songinfo = libuade.uade_get_song_info(self.state).contents
+
+        # last_hash: int = 0
+
+        # Determine length of subsong
+
+        while nbytes > 0 and songinfo.subsongs.cur == subsong_nr:
+            last_subsongbytes = songinfo.subsongbytes
+
+            nbytes = libuade.uade_read(self.buf, self.buf_len, self.state)
+
+            # h = hash(self.buf.raw)
+
+            # if h == last_hash:
+            #     print("blabla")
+
+            # last_hash = h
+
+            # self.check_notifications()
+            # event = self.get_event(self.state)
+
+            # Workaround: If the song is longer than 10 min, we’re probably looping forever
+            if last_subsongbytes >= 176400 * 60 * 10:
+                break
+
+        libuade.uade_cleanup_state(self.state)
+
+        subsong = Subsong()
+        subsong.nr = subsong_nr
+        subsong.bytes = last_subsongbytes
+
+        return subsong
+
+    # Scan song file and return representation of that song
+
+    def scan_song(self, filename: str) -> SongFile:
         # Get song info
 
         self.state = libuade.uade_new_state(None)
@@ -131,58 +189,30 @@ class Uade(QObject):
 
         # Scan subsongs
 
-        subsongs_min = songinfo.subsongs.min
-        subsongs_max = songinfo.subsongs.max
+        song.subsongs_min = songinfo.subsongs.min
+        subsongs_max: int = songinfo.subsongs.max
 
         libuade.uade_cleanup_state(self.state)
 
-        for s in range(subsongs_min, subsongs_max + 1):
+        # Scan subsongs
 
-            self.state = libuade.uade_new_state(None)
+        progress = QProgressDialog(
+            "Scanning subsongs...", "Cancel", song.subsongs_min, subsongs_max + 1, None)
+        progress.setWindowModality(QtCore.Qt.WindowModal)
 
-            size = c_size_t()
+        for s in range(song.subsongs_min, subsongs_max + 1):
+            progress.setValue(s)
 
-            libuade.uade_read_file(byref(size), str.encode(filename))
-            libuade.uade_play(str.encode(filename), s, self.state)
+            if progress.wasCanceled():
+                break
 
-            nbytes = 1
+            song.subsongs.append(self.scan_subsong(filename, s))
 
-            last_subsongbytes = 0
-
-            songinfo = libuade.uade_get_song_info(self.state).contents
-
-            last_hash = 0
-
-            while nbytes > 0 and songinfo.subsongs.cur == s:
-                last_subsongbytes = songinfo.subsongbytes
-
-                nbytes = libuade.uade_read(self.buf, self.buf_len, self.state)
-
-                # h = hash(self.buf.raw)
-
-                # if h == last_hash:
-                #     print("blabla")
-
-                # last_hash = h
-
-                # self.check_notifications()
-                # event = self.get_event(self.state)
-
-                # Workaround: If the song is longer than 10 min, we’re probably looping forever
-                if last_subsongbytes >= 176400 * 60 * 10:
-                    break
-
-            libuade.uade_cleanup_state(self.state)
-
-            subsong = Subsong()
-            subsong.nr = s
-            subsong.bytes = last_subsongbytes
-
-            song.subsongs.append(subsong)
+        progress.setValue(subsongs_max + 1)
 
         return song
 
-    def prepare_play(self, filename, subsong):
+    def prepare_play(self, song: SongFile, subsong_nr: int) -> None:
         self.state = libuade.uade_new_state(None)
 
         if not self.state:
@@ -192,8 +222,9 @@ class Uade(QObject):
 
         size = c_size_t()
 
-        libuade.uade_read_file(byref(size), str.encode(filename))
-        libuade.uade_play(str.encode(filename), subsong, self.state)
+        libuade.uade_read_file(byref(size), str.encode(song.filename))
+        libuade.uade_play(str.encode(
+            song.filename), song.subsongs[subsong_nr].nr + song.subsongs_min, self.state)
 
         format = ao_sample_format(2 * 8, samplerate, 2, 4)
 
@@ -245,10 +276,10 @@ class Uade(QObject):
 
             libuade.uade_cleanup_notification(notification)
 
-    def samples_to_bytes(self, samples) -> int:
+    def samples_to_bytes(self, samples: int) -> int:
         return samples * 4
 
-    def bytes_to_samples(self, bytes) -> int:
+    def bytes_to_samples(self, bytes: int) -> int:
         return int(bytes / 4)
 
     def play_threaded(self):
