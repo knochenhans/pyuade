@@ -9,7 +9,7 @@ import ntpath
 # import soundfile as sf
 from PySide6 import QtCore, QtWidgets
 from PySide6.QtCore import QCoreApplication, QEvent, QSize, QThread, QModelIndex, QItemSelectionModel
-from PySide6.QtWidgets import QAbstractItemView, QFileDialog, QMenu, QProgressDialog, QSlider, QStatusBar, QToolBar, QTreeView
+from PySide6.QtWidgets import QAbstractItemView, QFileDialog, QLabel, QMenu, QProgressDialog, QSlider, QStatusBar, QToolBar, QTreeView
 from PySide6.QtGui import QAction, QIcon, QStandardItem, QStandardItemModel
 import debugpy
 import configparser
@@ -231,8 +231,13 @@ class MyWidget(QtWidgets.QMainWindow):
         self.timeline.setPageStep(5)
         self.timeline.setTracking(False)
         # timeline.setStyleSheet("QSlider::handle:horizontal {background-color: red;}")
-
         toolbar.addWidget(self.timeline)
+
+        self.time = QLabel("00:00")
+        self.time_total = QLabel("00:00")
+        toolbar.addWidget(self.time)
+        toolbar.addWidget(QLabel(" / "))
+        toolbar.addWidget(self.time_total)
 
     def setup_menu(self) -> None:
         menu = self.menuBar()
@@ -346,6 +351,8 @@ class MyWidget(QtWidgets.QMainWindow):
                                           QItemSelectionModel.SelectCurrent | QItemSelectionModel.Rows)
 
         self.timeline.setMaximum(song.subsong.bytes)
+        self.time_total.setText(str(datetime.timedelta(
+            seconds=song.subsong.bytes/176400)).split(".")[0])
 
         # Set current track (for pausing)
 
@@ -375,6 +382,8 @@ class MyWidget(QtWidgets.QMainWindow):
         self.thread.quit()
         self.thread.wait()
         self.timeline.setSliderPosition(0)
+        self.time.setText("00:00")
+        self.time_total.setText("00:00")
 
     def play_next_item(self) -> None:
 
@@ -430,6 +439,9 @@ class MyWidget(QtWidgets.QMainWindow):
     def timeline_update(self, bytes: int) -> None:
         if self.timeline_tracking:
             self.timeline.setValue(bytes)
+
+        self.time.setText(str(datetime.timedelta(
+            seconds=bytes/176400)).split(".")[0])
 
     @ QtCore.Slot()
     def timeline_pressed(self):
