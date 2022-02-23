@@ -15,10 +15,8 @@ import debugpy
 import configparser
 from appdirs import *
 from pathlib import Path
-from isort import file
 from notifypy import Notify
-import typing
-import json
+import jsonpickle
 
 from ctypes_functions import *
 from uade import *
@@ -78,20 +76,29 @@ class MyWidget(QtWidgets.QMainWindow):
         self.timeline.sliderReleased.connect(self.timeline_released)
 
         self.current_row: int = 0
-        self.current_index: QModelIndex
         self.timeline_tracking: bool = True
 
         self.current_selection = QItemSelectionModel(self.model)
 
+        # List of loaded song files for saving the playlist
+        # self.song_files: list[SongFile] = []
+
     def read_config(self) -> None:
 
-        # Read playlist
+        # Read song files and playlist
+        # TODO: do this using md5 of song files
 
-        if exists(user_config_dir(self.appname) + '/playlist'):
-            with open(user_config_dir(self.appname) + '/playlist', 'r') as playlist:
-                for line in playlist:
-                    # self.load_file(line.rstrip("\n"))
-                    pass
+        # if exists(user_config_dir(self.appname) + '/songfiles.json'):
+        #     with open(user_config_dir(self.appname) + '/songfiles.json', 'r') as playlist:
+        #         self.song_files = jsonpickle.decode(playlist.read())
+
+        if exists(user_config_dir(self.appname) + '/playlist.json'):
+            with open(user_config_dir(self.appname) + '/playlist.json', 'r') as playlist:
+                playlist: list[Song] = jsonpickle.decode(playlist.read())
+
+            if playlist:
+                for p in playlist:
+                    self.load_song(p)
 
         # Read config
 
@@ -116,6 +123,7 @@ class MyWidget(QtWidgets.QMainWindow):
                         c, int(self.config["window"]["col" + str(c) + "_width"]))
 
     def write_config(self) -> None:
+
         # Write config
 
         self.config["window"]["width"] = str(self.geometry().width())
@@ -135,51 +143,31 @@ class MyWidget(QtWidgets.QMainWindow):
             self.config["window"]["col" + str(c) +
                                   "_width"] = str(self.tree.columnWidth(c))
 
-        with open(user_config_dir(self.appname) + '/config.ini', 'w') as configfile:
-            self.config.write(configfile)
+        with open(user_config_dir(self.appname) + '/config.ini', 'w') as config_file:
+            self.config.write(config_file)
 
-        # Write playlist
+        if self.model.rowCount() > 0:
 
-        filenames: list[str] = []
+            # Write song files
 
-        for r in range(self.model.rowCount()):
-            index: QModelIndex = self.model.index(r, 4)
-            filenames.append(self.model.data(index))
+            # if self.song_files:
+            #     with open(user_config_dir(self.appname) + '/songfiles.json', 'w') as song_files:
+            #         song_files.write(str(jsonpickle.encode(self.song_files)))
 
-            # Ignore subsongs, only save one filename per song
-            filenames = list(dict.fromkeys(filenames))
+            # Write playlist (referencing song files)
+            # TODO: do this using md5 of song files
 
-        with open(user_config_dir(self.appname) + '/playlist', 'w') as playlist:
-            for line in filenames:
-                # playlist.write(line + "\n")
-                pass
+            with open(user_config_dir(self.appname) + '/playlist.json', 'w') as playlist:
+                songs: list[Song] = []
 
-        # json_list: list[list[str]] = []
+                for r in range(self.model.rowCount()):
+                    song: Song = self.model.itemFromIndex(
+                        self.model.index(r, 0)).data(QtCore.Qt.UserRole)
 
-        # for r in range(self.model.rowCount()):
-        #     row: list[str] = []
+                    songs.append(song)
 
-        #     for c in range(self.model.columnCount()):
-        #         index: QModelIndex = self.model.index(r, c)
-
-        #         row.append(self.model.data(index))
-
-        #     if row:
-        #         json_list.append(row)
-
-        # json_file = json.dumps(json_list, sort_keys=True, indent=4)
-
-        # print(json_file)
-
-        # json_in = json.loads(json_file)
-
-        for r in range(self.model.rowCount()):
-            song: SongFile = self.model.itemFromIndex(
-                self.model.index(r, 0)).data(QtCore.Qt.UserRole)
-            subsong_nr: int = int(self.model.itemFromIndex(
-                self.model.index(r, TREEVIEWCOL.SUBSONG)).text())
-
-            print(json.dumps(song.toJSON(), sort_keys=True, indent=4))
+                if songs:
+                    playlist.write(str(jsonpickle.encode(songs)))
 
     def setup_actions(self) -> None:
         self.load_action = QAction("Load", self)
@@ -354,7 +342,7 @@ class MyWidget(QtWidgets.QMainWindow):
         self.time_total.setText(str(datetime.timedelta(
             seconds=song.subsong.bytes/176400)).split(".")[0])
 
-        # Set current track (for pausing)
+        # Set current song (for pausing)
 
         self.current_selection.setCurrentIndex(self.model.index(
             self.current_row, 0), QItemSelectionModel.SelectCurrent)
@@ -432,6 +420,8 @@ class MyWidget(QtWidgets.QMainWindow):
 
     def load_file(self, filename: str) -> None:
         song_file = uade.scan_song_file(filename)
+        # self.song_files.append(song_file)
+
         subsongs = uade.split_subsongs(song_file)
 
         for subsong in subsongs:

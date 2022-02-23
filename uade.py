@@ -33,11 +33,7 @@ class SongFile():
         self.content: bool
         self.ext: str = ""
 
-        # self.subsongs: list[Subsong] = []
         self.subsong_data: SubsongData = SubsongData()
-
-    def toJSON(self):
-        return json.dumps(self, default=lambda o: o.__dict__)
 
 
 # Subsong of a song in the playlist
