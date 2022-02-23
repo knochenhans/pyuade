@@ -307,7 +307,7 @@ class MyWidget(QtWidgets.QMainWindow):
         while self.tree.selectionModel().selectedRows(0):
             idx: QModelIndex = self.tree.selectionModel().selectedRows(0)[0]
 
-            #TODO: rebuild
+            # TODO: rebuild
             # if idx.row() == self.current_row:
             #     self.current_row = self.tree.indexBelow(
             #         self.current_row)
@@ -379,11 +379,13 @@ class MyWidget(QtWidgets.QMainWindow):
 
     def stop(self) -> None:
         self.thread.running = False
+        self.thread.paused = False
         self.thread.quit()
         self.thread.wait()
         self.timeline.setSliderPosition(0)
         self.time.setText("00:00")
         self.time_total.setText("00:00")
+        self.play_action.setIcon(QIcon("play.svg"))
 
     def play_next_item(self) -> None:
 
@@ -489,12 +491,15 @@ class MyWidget(QtWidgets.QMainWindow):
     @ QtCore.Slot()
     def play_clicked(self):
         if self.model.rowCount(self.tree.rootIndex()) > 0:
-            if self.thread.paused:
-                self.thread.paused = False
-                self.play_action.setIcon(QIcon("pause.svg"))
+            if self.thread.running:
+                if self.thread.paused:
+                    self.thread.paused = False
+                    self.play_action.setIcon(QIcon("pause.svg"))
+                else:
+                    self.thread.paused = True
+                    self.play_action.setIcon(QIcon("play.svg"))
             else:
-                self.thread.paused = True
-                self.play_action.setIcon(QIcon("play.svg"))
+                self.play(self.current_row)
 
     @ QtCore.Slot()
     def stop_clicked(self):
