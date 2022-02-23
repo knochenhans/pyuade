@@ -27,18 +27,15 @@ uade = Uade()
 
 
 class PlayerThread(QThread):
-    # current_filename: str = ""
-    current_subsong_nr: int = -1
-
     def __init__(self, parent=None) -> None:
         QThread.__init__(self, parent)
         self.running = False
         self.paused = False
-        self.current_song: SongFile
+        self.current_song: Song
 
     def run(self):
         debugpy.debug_this_thread()
-        uade.prepare_play(self.current_song, self.current_subsong_nr)
+        uade.prepare_play(self.current_song)
 
         while self.running:
             if not self.paused:
@@ -85,7 +82,6 @@ class MyWidget(QtWidgets.QMainWindow):
         self.timeline_tracking: bool = True
 
         self.current_selection = QItemSelectionModel(self.model)
-        self.current_song: SongFile
 
     def read_config(self) -> None:
 
@@ -336,12 +332,12 @@ class MyWidget(QtWidgets.QMainWindow):
         if self.thread.running:
             self.stop()
 
-        song: SongFile = self.model.itemFromIndex(self.model.index(
-            self.current_row, 0)).data(QtCore.Qt.UserRole)
-        subsong_nr: int = int(self.model.itemFromIndex(
-            self.model.index(row, TREEVIEWCOL.SUBSONG)).text())
+        # Get song from user data in column
 
-        self.play_file_thread(song, subsong_nr)
+        song: Song = self.model.itemFromIndex(
+            self.model.index(row, 0)).data(QtCore.Qt.UserRole)
+
+        self.play_file_thread(song)
         self.current_row = row
 
         # Select playing track
@@ -349,29 +345,28 @@ class MyWidget(QtWidgets.QMainWindow):
         self.tree.selectionModel().select(self.model.index(self.current_row, 0),
                                           QItemSelectionModel.SelectCurrent | QItemSelectionModel.Rows)
 
-        self.timeline.setMaximum(song.subsongs[subsong_nr].bytes)
+        self.timeline.setMaximum(song.subsong.bytes)
 
         # Set current track (for pausing)
 
         self.current_selection.setCurrentIndex(self.model.index(
             self.current_row, 0), QItemSelectionModel.SelectCurrent)
-        self.current_song = song
+        self.thread.current_song = song
 
         # Notification
 
         notification = Notify()
         notification.title = "Now playing"
-        notification.message = song.filename
+        notification.message = song.song_file.filename
         notification.icon = "play.svg"
         notification.send(block=False)
 
-        print("Now playing " + song.filename)
+        print("Now playing " + song.song_file.filename)
 
         self.play_action.setIcon(QIcon("pause.svg"))
 
-    def play_file_thread(self, song: SongFile, subsong_nr: int) -> None:
+    def play_file_thread(self, song: Song) -> None:
         self.thread.current_song = song
-        self.thread.current_subsong_nr = subsong_nr
         self.thread.start()
         self.thread.running = True
 
@@ -396,37 +391,40 @@ class MyWidget(QtWidgets.QMainWindow):
         if self.current_row > 0:
             self.play(self.current_row - 1)
 
-    def load_song(self, song: SongFile) -> None:
-        # Add all subsongs (including main song)
+    def load_song(self, song: Song) -> None:
+        # Add subsong to playlist
 
-        for s in range(0, len(song.subsongs)):
-            tree_rows: list[QStandardItem] = []
+        tree_rows: list[QStandardItem] = []
 
-            for col in TREEVIEWCOL:
-                match col:
-                    case TREEVIEWCOL.FILENAME:
-                        item = QStandardItem(ntpath.basename(song.filename))
+        for col in TREEVIEWCOL:
+            match col:
+                case TREEVIEWCOL.FILENAME:
+                    item = QStandardItem(
+                        ntpath.basename(song.song_file.filename))
 
-                        # Store song in filename column for every row for future use
-                        item.setData(song, QtCore.Qt.UserRole)
-                        tree_rows.append(item)
-                    case TREEVIEWCOL.SONGNAME:
-                        tree_rows.append(QStandardItem(song.modulename))
-                    case TREEVIEWCOL.DURATION:
-                        tree_rows.append(QStandardItem(str(datetime.timedelta(
-                            seconds=song.subsongs[s].bytes/176400)).split(".")[0]))
-                    case TREEVIEWCOL.PLAYER:
-                        tree_rows.append(QStandardItem(song.playername))
-                    case TREEVIEWCOL.PATH:
-                        tree_rows.append(QStandardItem(song.filename))
-                    case TREEVIEWCOL.SUBSONG:
-                        tree_rows.append(QStandardItem(str(s)))
+                    # Store song in filename column for every row for future use
+                    item.setData(song, QtCore.Qt.UserRole)
+                    tree_rows.append(item)
+                case TREEVIEWCOL.SONGNAME:
+                    tree_rows.append(QStandardItem(song.song_file.modulename))
+                case TREEVIEWCOL.DURATION:
+                    tree_rows.append(QStandardItem(str(datetime.timedelta(
+                        seconds=song.subsong.bytes/176400)).split(".")[0]))
+                case TREEVIEWCOL.PLAYER:
+                    tree_rows.append(QStandardItem(song.song_file.playername))
+                case TREEVIEWCOL.PATH:
+                    tree_rows.append(QStandardItem(song.song_file.filename))
+                case TREEVIEWCOL.SUBSONG:
+                    tree_rows.append(QStandardItem(str(song.subsong.nr)))
 
-            self.model.appendRow(tree_rows)
+        self.model.appendRow(tree_rows)
 
     def load_file(self, filename: str) -> None:
-        # self.load_song(uade.scan_song(filename))
-        song_file = uade.scan_song(filename)
+        song_file = uade.scan_song_file(filename)
+        subsongs = uade.split_subsongs(song_file)
+
+        for subsong in subsongs:
+            self.load_song(subsong)
 
     @ QtCore.Slot()
     def timeline_update(self, bytes: int) -> None:
@@ -469,8 +467,7 @@ class MyWidget(QtWidgets.QMainWindow):
                 if progress.wasCanceled():
                     break
 
-                # self.load_file(filename)
-                self.load_song(uade.scan_song(filename))
+                self.load_file(filename)
 
             progress.setValue(len(filenames))
 

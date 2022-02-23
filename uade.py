@@ -6,13 +6,13 @@ from PySide6.QtWidgets import QProgressDialog
 from ctypes_functions import *
 import json
 
-# Subsong of a song file
 
-
-class Subsong():
+class SubsongData():
     def __init__(self) -> None:
-        self.nr: int = 0
-        self.bytes: int = 0
+        self.cur: int = 0
+        self.min: int = 0
+        self.def_: int = 0
+        self.max: int = 0
 
 
 # Unique reference to the actual module file, filled by data from UADE
@@ -33,10 +33,19 @@ class SongFile():
         self.content: bool
         self.ext: str = ""
 
-        self.subsongs: list[Subsong] = []
+        # self.subsongs: list[Subsong] = []
+        self.subsong_data: SubsongData = SubsongData()
 
     def toJSON(self):
         return json.dumps(self, default=lambda o: o.__dict__)
+
+
+# Subsong of a song in the playlist
+
+class Subsong():
+    def __init__(self) -> None:
+        self.nr: int = 0
+        self.bytes: int = 0
 
 
 # Represents a specific subsong of a song as playable in the playlist
@@ -101,14 +110,15 @@ class Uade(QObject):
     def position_changed(self, bytes: int):
         self.seek(bytes)
 
-    def scan_subsong(self, filename: str, subsong_nr: int) -> Subsong:
+    def scan_subsong(self, song_file: SongFile, subsong_nr: int) -> Subsong:
 
         self.state = libuade.uade_new_state(None)
 
         size = c_size_t()
 
-        libuade.uade_read_file(byref(size), str.encode(filename))
-        libuade.uade_play(str.encode(filename), subsong_nr, self.state)
+        libuade.uade_read_file(byref(size), str.encode(song_file.filename))
+        libuade.uade_play(str.encode(song_file.filename),
+                          subsong_nr, self.state)
 
         nbytes = 1
 
@@ -149,7 +159,7 @@ class Uade(QObject):
 
     # Scan song file and return representation of that song
 
-    def scan_song(self, filename: str) -> SongFile:
+    def scan_song_file(self, filename: str) -> SongFile:
         # Get song info
 
         self.state = libuade.uade_new_state(None)
@@ -164,55 +174,64 @@ class Uade(QObject):
         songinfo: uade_song_info = libuade.uade_get_song_info(
             self.state).contents
 
-        song = SongFile()
-        song.filename = filename
-        song.modulemd5 = songinfo.modulemd5.decode()
-        song.formatname = songinfo.formatname.decode()
-        song.modulename = songinfo.modulename.decode()
-        song.modulefname = songinfo.modulefname.decode()
-        song.playername = songinfo.playername.decode()
-        song.playerfname = songinfo.playerfname.decode()
-        song.modulebytes = songinfo.modulebytes
+        song_file = SongFile()
+        song_file.filename = filename
+        song_file.modulemd5 = songinfo.modulemd5.decode()
+        song_file.formatname = songinfo.formatname.decode()
+        song_file.modulename = songinfo.modulename.decode()
+        song_file.modulefname = songinfo.modulefname.decode()
+        song_file.playername = songinfo.playername.decode()
+        song_file.playerfname = songinfo.playerfname.decode()
+        song_file.modulebytes = songinfo.modulebytes
 
         if songinfo.detectioninfo:
             if songinfo.detectioninfo.custom == 1:
-                song.custom = True
+                song_file.custom = True
             else:
-                song.custom = False
+                song_file.custom = False
 
             if songinfo.detectioninfo.content == 1:
-                song.content = True
+                song_file.content = True
             else:
-                song.content = False
+                song_file.content = False
 
-            song.ext = songinfo.detectioninfo.ext.decode()
+            song_file.ext = songinfo.detectioninfo.ext.decode()
 
         # Scan subsongs
 
-        song.subsongs_min = songinfo.subsongs.min
-        subsongs_max: int = songinfo.subsongs.max
+        song_file.subsong_data.cur = songinfo.subsongs.cur
+        song_file.subsong_data.min = songinfo.subsongs.min
+        song_file.subsong_data.max = songinfo.subsongs.max
+        song_file.subsong_data.def_ = songinfo.subsongs.def_
 
+        return song_file
+
+    def split_subsongs(self, song_file: SongFile) -> list[Song]:
         libuade.uade_cleanup_state(self.state)
 
-        # Scan subsongs
-
         progress = QProgressDialog(
-            "Scanning subsongs...", "Cancel", song.subsongs_min, subsongs_max + 1, None)
+            "Scanning subsongs...", "Cancel", song_file.subsong_data.min, song_file.subsong_data.max + 1, None)
         progress.setWindowModality(QtCore.Qt.WindowModal)
 
-        for s in range(song.subsongs_min, subsongs_max + 1):
+        songs: list[Song] = []
+
+        for s in range(song_file.subsong_data.min, song_file.subsong_data.max + 1):
             progress.setValue(s)
 
             if progress.wasCanceled():
                 break
 
-            song.subsongs.append(self.scan_subsong(filename, s))
+            subsong: Song = Song()
+            subsong.song_file = song_file
+            subsong.subsong = self.scan_subsong(song_file, s)
 
-        progress.setValue(subsongs_max + 1)
+            songs.append(subsong)
 
-        return song
+        progress.setValue(song_file.subsong_data.max + 1)
 
-    def prepare_play(self, song: SongFile, subsong_nr: int) -> None:
+        return songs
+
+    def prepare_play(self, song: Song) -> None:
         self.state = libuade.uade_new_state(None)
 
         if not self.state:
@@ -222,9 +241,10 @@ class Uade(QObject):
 
         size = c_size_t()
 
-        libuade.uade_read_file(byref(size), str.encode(song.filename))
+        libuade.uade_read_file(
+            byref(size), str.encode(song.song_file.filename))
         libuade.uade_play(str.encode(
-            song.filename), song.subsongs[subsong_nr].nr + song.subsongs_min, self.state)
+            song.song_file.filename), song.subsong.nr, self.state)
 
         format = ao_sample_format(2 * 8, samplerate, 2, 4)
 

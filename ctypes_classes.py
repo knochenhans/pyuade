@@ -28,7 +28,7 @@ class uade_subsong_info(Structure):
     _fields_ = [
         ("cur", c_int),
         ("min", c_int),
-        ("def", c_int),
+        ("def_", c_int),
         ("max", c_int),
     ]
 
