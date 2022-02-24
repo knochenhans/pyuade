@@ -1,22 +1,43 @@
 from ctypes import *
+from ctypes import util
 from ctypes_classes import *
 import platform
 
 if platform.system() == "Linux":
-    libc = CDLL(None)
-    #libc = CDLL("/usr/lib/libc.so.6")
+    # libc = CDLL(None)
+    # libc = CDLL("/usr/lib/libc.so.6")
 
     # Load libbencodetools as requirement for libuade
     CDLL("libbencodetools.so", mode=RTLD_GLOBAL)
 
     libuade = CDLL("libuade.so", mode=RTLD_GLOBAL)
     libao = CDLL("libao.so")
-
-if platform.system() == "Windows":
+elif platform.system() == "Windows":
     # TODO
+    # libc = CDLL(None)
+
+    # class FILE(Structure):
+    #     _fields_ = [
+    #         ("_ptr", c_char_p),
+    #         ("_cnt", c_int),
+    #         ("_base", c_char_p),
+    #         ("_flag", c_int),
+    #         ("_file", c_int),
+    #         ("_charbuf", c_int),
+    #         ("_bufsize", c_int),
+    #         ("_tmpfname", c_char_p),
+    #     ]
+
+    # # Gives you the name of the library that you should really use (and then load through ctypes.CDLL
+    # msvcrt = CDLL(util.find_msvcrt())
+    # libc = msvcrt # libc was used in the original example in _redirect_stdout()
+    # iob_func = msvcrt.__iob_func
+    # iob_func.restype = POINTER(FILE)
+    # iob_func.argtypes = []
+
     pass
 
-libc.free.argtypes = [c_void_p]
+# libc.free.argtypes = [c_void_p]
 
 libuade.uade_new_state.argtypes = [c_void_p]
 libuade.uade_new_state.restype = c_void_p
