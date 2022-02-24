@@ -1,14 +1,22 @@
 from ctypes import *
 from ctypes_classes import *
+import platform
 
-libc = CDLL("/usr/lib/libc.so.6")
+if platform.system() == "Linux":
+    libc = CDLL(None)
+    #libc = CDLL("/usr/lib/libc.so.6")
+
+    # Load libbencodetools as requirement for libuade
+    CDLL("libbencodetools.so", mode=RTLD_GLOBAL)
+
+    libuade = CDLL("libuade.so", mode=RTLD_GLOBAL)
+    libao = CDLL("libao.so")
+
+if platform.system() == "Windows":
+    # TODO
+    pass
 
 libc.free.argtypes = [c_void_p]
-
-CDLL("/usr/lib/libbencodetools.so", mode=RTLD_GLOBAL)
-# libuade = CDLL("/usr/lib/libuade.so", mode=RTLD_GLOBAL)
-libuade = CDLL("/tmp/uade/src/frontends/libuade/libuade.so", mode=RTLD_GLOBAL)
-libao = CDLL("/usr/lib/libao.so.4")
 
 libuade.uade_new_state.argtypes = [c_void_p]
 libuade.uade_new_state.restype = c_void_p
