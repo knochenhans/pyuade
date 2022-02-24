@@ -47,6 +47,38 @@ class PlayerThread(QThread):
         uade.stop()
 
 
+class MyTreeView(QTreeView):
+    def __init__(self, parent=None):
+        super(MyTreeView, self).__init__(parent)
+        self.dropIndicatorRect = QtCore.QRect()
+
+    def paintEvent(self, event):
+        painter = QPainter(self.viewport())
+        self.drawTree(painter, event.region())
+        self.paintDropIndicator(painter)
+
+    def paintDropIndicator(self, painter):
+
+        if self.state() == QAbstractItemView.DraggingState:
+            opt = QStyleOption()
+            opt.init(self)
+            opt.rect = self.dropIndicatorRect
+            rect = opt.rect
+
+            brush = QBrush(QColor(QtCore.Qt.black))
+
+            if rect.height() == 0:
+                pen = QPen(brush, 2, QtCore.Qt.SolidLine)
+                painter.setPen(pen)
+                painter.drawLine(rect.topLeft(), rect.topRight())
+            else:
+                pen = QPen(brush, 2, QtCore.Qt.SolidLine)
+                painter.setPen(pen)
+                painter.drawRect(rect)
+
+# class MyTreeWidget(QTreeWidget, MyTreeView):
+
+
 class TREEVIEWCOL(IntEnum):
     FILENAME = 0
     SONGNAME = 1
@@ -246,7 +278,7 @@ class MyWidget(QtWidgets.QMainWindow):
 
         self.tree = QtWidgets.QListWidget()
 
-        self.tree = QTreeView()
+        self.tree = MyTreeView()
         self.model = QStandardItemModel(0, 4)
 
         labels: list[str] = []
