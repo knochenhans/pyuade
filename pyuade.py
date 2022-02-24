@@ -38,7 +38,8 @@ class PlayerThread(QThread):
         while self.running:
             if not self.paused:
                 try:
-                    uade.play_threaded()
+                    if not uade.play_threaded():
+                        self.running = False
                 except EOFError:
                     self.running = False
                 except Exception:

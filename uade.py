@@ -248,7 +248,8 @@ class Uade(QObject):
 
         self.libao_device = libao.ao_open_live(driver, byref(format), None)
 
-    def check_notifications(self):
+    # Check notifications, return False when song end found
+    def check_notifications(self) -> bool:
         notification_song_end = uade_notification_song_end(
             happy=0, stopnow=0, subsong=0, subsongbytes=0, reason=None)
 
@@ -268,7 +269,8 @@ class Uade(QObject):
                 if notification_union.msg:
                     print("Amiga message: " + notification_union.msg.decode())
             elif notification.type == UADE_NOTIFICATION_TYPE.UADE_NOTIFICATION_SONG_END:
-                self.song_end.emit()
+                # self.song_end.emit()
+                return False
 
                 if notification_song_end.happy != 0:
                     print("song_end.happy: " + str(notification_song_end.happy))
@@ -292,13 +294,15 @@ class Uade(QObject):
 
             libuade.uade_cleanup_notification(notification)
 
+        return True
+
     def samples_to_bytes(self, samples: int) -> int:
         return samples * 4
 
     def bytes_to_samples(self, bytes: int) -> int:
         return int(bytes / 4)
 
-    def play_threaded(self):
+    def play_threaded(self) -> bool:
         songinfo: uade_song_info = libuade.uade_get_song_info(
             self.state).contents
 
@@ -308,23 +312,27 @@ class Uade(QObject):
         nbytes = libuade.uade_read(self.buf, self.buf_len, self.state)
 
         self.current_bytes_update.emit(songinfo.subsongbytes)
-        self.check_notifications()
+        if self.check_notifications():
 
-        # pa = cast(buf, POINTER(c_char * buf_len))
-        # a = np.frombuffer(pa.contents, dtype=np.int16)
+            # pa = cast(buf, POINTER(c_char * buf_len))
+            # a = np.frombuffer(pa.contents, dtype=np.int16)
 
-        if nbytes < 0:
-            raise Exception("Playback error")
-        elif nbytes == 0:
+            if nbytes < 0:
+                raise Exception("Playback error")
+            elif nbytes == 0:
+                self.song_end.emit()
+                #raise EOFError("Song end")
+                return False
+            # else:
+                # total = np.append(total, a)
+
+                # Only for RMC songs
+                # print(libuade.uade_get_time_position(1, self.state))
+
+            if not libao.ao_play(self.libao_device, self.buf, nbytes):
+                return False
+        else:
             self.song_end.emit()
-            #raise EOFError("Song end")
-        # else:
-            # total = np.append(total, a)
-
-            # Only for RMC songs
-            # print(libuade.uade_get_time_position(1, self.state))
-
-        if not libao.ao_play(self.libao_device, self.buf, nbytes):
             return False
 
         # cast(buf2, POINTER(c_char))
