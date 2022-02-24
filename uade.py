@@ -307,22 +307,22 @@ class Uade(QObject):
 
         nbytes = libuade.uade_read(self.buf, self.buf_len, self.state)
 
+        self.current_bytes_update.emit(songinfo.subsongbytes)
+        self.check_notifications()
+
         # pa = cast(buf, POINTER(c_char * buf_len))
         # a = np.frombuffer(pa.contents, dtype=np.int16)
 
         if nbytes < 0:
             raise Exception("Playback error")
         elif nbytes == 0:
-            # self.song_end.emit()
-            raise EOFError("Song end")
-        else:
+            self.song_end.emit()
+            #raise EOFError("Song end")
+        # else:
             # total = np.append(total, a)
 
             # Only for RMC songs
             # print(libuade.uade_get_time_position(1, self.state))
-
-            self.check_notifications()
-            self.current_bytes_update.emit(songinfo.subsongbytes)
 
         if not libao.ao_play(self.libao_device, self.buf, nbytes):
             return False

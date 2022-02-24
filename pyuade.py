@@ -507,7 +507,7 @@ class MyWidget(QtWidgets.QMainWindow):
 
     @ QtCore.Slot()
     def item_finished(self):
-        print("End of current song reached")
+        print(f"End of {self.thread.current_song.song_file.filename} reached")
         self.stop()
         self.play_next_item()
 
