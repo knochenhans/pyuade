@@ -10,7 +10,7 @@ import ntpath
 from PySide6 import QtCore, QtWidgets
 from PySide6.QtCore import QCoreApplication, QEvent, QSize, QThread, QModelIndex, QItemSelectionModel
 from PySide6.QtWidgets import QAbstractItemView, QFileDialog, QLabel, QMenu, QProgressDialog, QSlider, QStatusBar, QToolBar, QTreeView
-from PySide6.QtGui import QAction, QIcon, QStandardItem, QStandardItemModel
+from PySide6.QtGui import QAction, QIcon, QKeySequence, QStandardItem, QStandardItemModel
 import debugpy
 import configparser
 from appdirs import *
@@ -172,10 +172,12 @@ class MyWidget(QtWidgets.QMainWindow):
     def setup_actions(self) -> None:
         self.load_action = QAction("Load", self)
         self.load_action.setStatusTip("Load")
+        self.load_action.setShortcut(QKeySequence("Ctrl+o"))
         self.load_action.triggered.connect(self.load_clicked)
 
         self.quit_action = QAction("Quit", self)
         self.quit_action.setStatusTip("Quit")
+        self.quit_action.setShortcut(QKeySequence("Ctrl+q"))
         self.quit_action.triggered.connect(self.quit_clicked)
 
         self.play_action = QAction(QIcon("play.svg"), "Play", self)
