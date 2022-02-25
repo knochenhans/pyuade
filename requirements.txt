@@ -1,0 +1,7 @@
+appdirs==1.4.4
+debugpy==1.5.1
+jsonpickle==1.5.2
+notifypy==1.0.3.0
+pydub==0.25.1
+PySide6==6.2.3
+simpleaudio==1.0.4
