@@ -25,8 +25,9 @@ uade = Uade()
 
 
 class PlayerThread(QThread):
-    def __init__(self, parent=None) -> None:
-        QThread.__init__(self, parent)
+    def __init__(self, parent) -> None:
+        super().__init__(parent)
+
         self.running = False
         self.paused = False
         self.current_song: Song
@@ -95,7 +96,7 @@ class MyWidget(QtWidgets.QMainWindow):
 
         self.setup_gui()
 
-        self.thread = PlayerThread()
+        self.thread = PlayerThread(self)
         self.appname = "pyuade"
         self.appauthor = "Andre Jonas"
 
@@ -349,6 +350,7 @@ class MyWidget(QtWidgets.QMainWindow):
     @ QtCore.Slot()
     def quit_clicked(self):
         self.stop()
+        self.thread.wait()
         QCoreApplication.quit()
 
     @ QtCore.Slot()
