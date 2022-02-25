@@ -4,7 +4,6 @@ from PySide6 import QtCore
 from ctypes import *
 from PySide6.QtWidgets import QProgressDialog
 from ctypes_functions import *
-import json
 
 
 class SubsongData():
@@ -249,6 +248,7 @@ class Uade(QObject):
         self.libao_device = libao.ao_open_live(driver, byref(format), None)
 
     # Check notifications, return False when song end found
+    
     def check_notifications(self) -> bool:
         notification_song_end = uade_notification_song_end(
             happy=0, stopnow=0, subsong=0, subsongbytes=0, reason=None)
@@ -270,7 +270,6 @@ class Uade(QObject):
                     print("Amiga message: " + notification_union.msg.decode())
             elif notification.type == UADE_NOTIFICATION_TYPE.UADE_NOTIFICATION_SONG_END:
                 # self.song_end.emit()
-                return False
 
                 if notification_song_end.happy != 0:
                     print("song_end.happy: " + str(notification_song_end.happy))
@@ -289,6 +288,8 @@ class Uade(QObject):
 
                 if notification_song_end.reason:
                     print("song_end.reason: " + notification_song_end.reason)
+
+                return False
             else:
                 print("Unknown notification type from libuade")
 
