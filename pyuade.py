@@ -9,8 +9,8 @@ import ntpath
 # import soundfile as sf
 from PySide6 import QtCore, QtWidgets
 from PySide6.QtCore import QCoreApplication, QEvent, QSize, QThread, QModelIndex, QItemSelectionModel
-from PySide6.QtWidgets import QAbstractItemView, QFileDialog, QLabel, QMenu, QProgressDialog, QSlider, QStatusBar, QToolBar, QTreeView
-from PySide6.QtGui import QAction, QIcon, QKeySequence, QStandardItem, QStandardItemModel
+from PySide6.QtWidgets import QAbstractItemView, QFileDialog, QLabel, QMenu, QProgressDialog, QSlider, QStatusBar, QStyleOption, QSystemTrayIcon, QToolBar, QTreeView
+from PySide6.QtGui import QAction, QBrush, QColor, QIcon, QKeySequence, QPainter, QPen, QStandardItem, QStandardItemModel
 import debugpy
 import configparser
 from appdirs import *
@@ -116,6 +116,10 @@ class MyWidget(QtWidgets.QMainWindow):
 
         # List of loaded song files for saving the playlist
         # self.song_files: list[SongFile] = []
+
+        self.tray = QSystemTrayIcon(QIcon("play.svg"))
+        # self.tray.setContextMenu(menu)
+        self.tray.show()
 
     def read_config(self) -> None:
 
@@ -394,6 +398,7 @@ class MyWidget(QtWidgets.QMainWindow):
         notification.send(block=False)
 
         print("Now playing " + song.song_file.filename)
+        self.tray.setToolTip(f"Playing {song.song_file.filename}")
 
         self.play_action.setIcon(QIcon("pause.svg"))
 
