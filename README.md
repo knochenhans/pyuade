@@ -8,7 +8,7 @@ This only runs under Linux for now.
 
 Dependencies:
 - libuade
-- libao (I’m planning to switch to a pure Python library sooner or later)
+- libao (I’m planning to switch to a pure Python audio library sooner or later)
 - libbencode (bencode-tools)
 - [Python requirements](requirements.txt)
 
