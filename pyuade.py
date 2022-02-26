@@ -467,13 +467,17 @@ class MyWidget(QtWidgets.QMainWindow):
         self.model.appendRow(tree_rows)
 
     def load_file(self, filename: str) -> None:
-        song_file = uade.scan_song_file(filename)
-        # self.song_files.append(song_file)
+        try:
+            song_file = uade.scan_song_file(filename)
+        except:
+            print(f"Loading {filename} failed, song skipped")
+        else:
+            # self.song_files.append(song_file)
 
-        subsongs = uade.split_subsongs(song_file)
+            subsongs = uade.split_subsongs(song_file)
 
-        for subsong in subsongs:
-            self.load_song(subsong)
+            for subsong in subsongs:
+                self.load_song(subsong)
 
     @ QtCore.Slot()
     def timeline_update(self, bytes: int) -> None:

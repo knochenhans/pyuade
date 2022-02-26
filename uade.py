@@ -106,49 +106,60 @@ class Uade(QObject):
         self.seek(bytes)
 
     def scan_subsong(self, song_file: SongFile, subsong_nr: int) -> Subsong:
-
         self.state = libuade.uade_new_state(None)
 
         size = c_size_t()
 
         libuade.uade_read_file(byref(size), str.encode(song_file.filename))
-        libuade.uade_play(str.encode(song_file.filename),
-                          subsong_nr, self.state)
-
-        nbytes = 1
-
-        last_subsongbytes = 0
-
-        songinfo = libuade.uade_get_song_info(self.state).contents
-
-        # last_hash: int = 0
-
-        # Determine length of subsong
-
-        while nbytes > 0 and songinfo.subsongs.cur == subsong_nr:
-            last_subsongbytes = songinfo.subsongbytes
-
-            nbytes = libuade.uade_read(self.buf, self.buf_len, self.state)
-
-            # h = hash(self.buf.raw)
-
-            # if h == last_hash:
-            #     print("blabla")
-
-            # last_hash = h
-
-            # self.check_notifications()
-            # event = self.get_event(self.state)
-
-            # Workaround: If the song is longer than 10 min, we’re probably looping forever
-            if last_subsongbytes >= 176400 * 60 * 10:
-                break
-
-        libuade.uade_cleanup_state(self.state)
 
         subsong = Subsong()
-        subsong.nr = subsong_nr
-        subsong.bytes = last_subsongbytes
+
+        match libuade.uade_play(str.encode(song_file.filename), subsong_nr, self.state):
+            case -1:
+                # Fatal error
+                pass
+            case 0:
+                # Not playable
+                raise Exception
+            case 1:
+                nbytes = 1
+
+                last_subsongbytes = 0
+
+                songinfo = libuade.uade_get_song_info(self.state).contents
+
+                # last_hash: int = 0
+
+                # Determine length of subsong
+
+                while nbytes > 0 and songinfo.subsongs.cur == subsong_nr:
+                    last_subsongbytes = songinfo.subsongbytes
+
+                    nbytes = libuade.uade_read(self.buf, self.buf_len, self.state)
+
+                    if nbytes < 0:
+                        raise Exception
+                    elif nbytes == 0:
+                        break
+
+                    # h = hash(self.buf.raw)
+
+                    # if h == last_hash:
+                    #     print("blabla")
+
+                    # last_hash = h
+
+                    # self.check_notifications()
+                    # event = self.get_event(self.state)
+
+                    # Workaround: If the song is longer than 10 min, we’re probably looping forever
+                    if last_subsongbytes >= 176400 * 60 * 10:
+                        break
+
+                libuade.uade_cleanup_state(self.state)
+
+                subsong.nr = subsong_nr
+                subsong.bytes = last_subsongbytes
 
         return subsong
 
@@ -164,40 +175,59 @@ class Uade(QObject):
         size = c_size_t()
 
         libuade.uade_read_file(byref(size), str.encode(filename))
-        libuade.uade_play(str.encode(filename), -1, self.state)
-
-        songinfo: uade_song_info = libuade.uade_get_song_info(
-            self.state).contents
 
         song_file = SongFile()
-        song_file.filename = filename
-        song_file.modulemd5 = songinfo.modulemd5.decode()
-        song_file.formatname = songinfo.formatname.decode()
-        song_file.modulename = songinfo.modulename.decode()
-        song_file.modulefname = songinfo.modulefname.decode()
-        song_file.playername = songinfo.playername.decode()
-        song_file.playerfname = songinfo.playerfname.decode()
-        song_file.modulebytes = songinfo.modulebytes
 
-        if songinfo.detectioninfo:
-            if songinfo.detectioninfo.custom == 1:
-                song_file.custom = True
-            else:
-                song_file.custom = False
+        match libuade.uade_play(str.encode(filename), -1, self.state):
+            case -1:
+                # Fatal error
+                libuade.uade_cleanup_state(self.state)
+                raise Exception
+            case 0:
+                # Not playable
+                raise Exception
+            case 1:
+                songinfo: uade_song_info = libuade.uade_get_song_info(
+                    self.state).contents
 
-            if songinfo.detectioninfo.content == 1:
-                song_file.content = True
-            else:
-                song_file.content = False
+                self.check_notifications()
+                self.get_event(self.state)
 
-            song_file.ext = songinfo.detectioninfo.ext.decode()
+                song_file.filename = filename
+                song_file.modulemd5 = songinfo.modulemd5.decode(
+                    encoding='latin-1')
+                song_file.formatname = songinfo.formatname.decode(
+                    encoding='latin-1')
+                song_file.modulename = songinfo.modulename.decode(
+                    encoding='latin-1')
+                song_file.modulefname = songinfo.modulefname.decode(
+                    encoding='latin-1')
+                song_file.playername = songinfo.playername.decode(
+                    encoding='latin-1')
+                song_file.playerfname = songinfo.playerfname.decode(
+                    encoding='latin-1')
+                song_file.modulebytes = songinfo.modulebytes
 
-        # Scan subsongs
+                if songinfo.detectioninfo:
+                    if songinfo.detectioninfo.custom == 1:
+                        song_file.custom = True
+                    else:
+                        song_file.custom = False
 
-        song_file.subsong_data.cur = songinfo.subsongs.cur
-        song_file.subsong_data.min = songinfo.subsongs.min
-        song_file.subsong_data.max = songinfo.subsongs.max
-        song_file.subsong_data.def_ = songinfo.subsongs.def_
+                    if songinfo.detectioninfo.content == 1:
+                        song_file.content = True
+                    else:
+                        song_file.content = False
+
+                    song_file.ext = songinfo.detectioninfo.ext.decode(
+                        encoding='latin-1')
+
+                # Scan subsongs
+
+                song_file.subsong_data.cur = songinfo.subsongs.cur
+                song_file.subsong_data.min = songinfo.subsongs.min
+                song_file.subsong_data.max = songinfo.subsongs.max
+                song_file.subsong_data.def_ = songinfo.subsongs.def_
 
         return song_file
 
@@ -218,7 +248,14 @@ class Uade(QObject):
 
             subsong: Song = Song()
             subsong.song_file = song_file
-            subsong.subsong = self.scan_subsong(song_file, s)
+
+            try:
+                s = self.scan_subsong(song_file, s)
+
+                if s:
+                    subsong.subsong = s
+            except:
+                print("Playback error while scanning, discarding song")
 
             songs.append(subsong)
 
@@ -238,17 +275,25 @@ class Uade(QObject):
 
         libuade.uade_read_file(
             byref(size), str.encode(song.song_file.filename))
-        libuade.uade_play(str.encode(
-            song.song_file.filename), song.subsong.nr, self.state)
 
-        format = ao_sample_format(2 * 8, samplerate, 2, 4)
+        match libuade.uade_play(str.encode(song.song_file.filename), song.subsong.nr, self.state):
+            case -1:
+                # Fatal error
+                libuade.uade_cleanup_state(self.state)
+                raise Exception
+            case 0:
+                # Not playable
+                raise Exception
+            case 1:
+                format = ao_sample_format(2 * 8, samplerate, 2, 4)
 
-        driver = libao.ao_default_driver_id()
+                driver = libao.ao_default_driver_id()
 
-        self.libao_device = libao.ao_open_live(driver, byref(format), None)
+                self.libao_device = libao.ao_open_live(
+                    driver, byref(format), None)
 
     # Check notifications, return False when song end found
-    
+
     def check_notifications(self) -> bool:
         notification_song_end = uade_notification_song_end(
             happy=0, stopnow=0, subsong=0, subsongbytes=0, reason=None)
