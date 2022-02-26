@@ -121,6 +121,8 @@ class MyWidget(QtWidgets.QMainWindow):
         # self.tray.setContextMenu(menu)
         self.tray.show()
 
+        self.setWindowIcon(QIcon("play.svg"))
+
     def read_config(self) -> None:
 
         # Read song files and playlist
