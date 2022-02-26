@@ -8,7 +8,7 @@ import ntpath
 # import sounddevice as sd
 # import soundfile as sf
 from PySide6 import QtCore, QtWidgets
-from PySide6.QtCore import QCoreApplication, QEvent, QSize, QThread, QModelIndex, QItemSelectionModel
+from PySide6.QtCore import QCoreApplication, QDirIterator, QEvent, QSize, QThread, QModelIndex, QItemSelectionModel
 from PySide6.QtWidgets import QAbstractItemView, QFileDialog, QLabel, QMenu, QProgressDialog, QSlider, QStatusBar, QStyleOption, QSystemTrayIcon, QToolBar, QTreeView
 from PySide6.QtGui import QAction, QBrush, QColor, QIcon, QKeySequence, QPainter, QPen, QStandardItem, QStandardItemModel
 import debugpy
@@ -213,6 +213,11 @@ class MyWidget(QtWidgets.QMainWindow):
         self.load_action.setShortcut(QKeySequence("Ctrl+o"))
         self.load_action.triggered.connect(self.load_clicked)
 
+        self.load_folder_action = QAction("Load folder", self)
+        self.load_folder_action.setStatusTip("Load folder")
+        self.load_folder_action.setShortcut(QKeySequence("Ctrl+Shift+o"))
+        self.load_folder_action.triggered.connect(self.load_folder_clicked)
+
         self.quit_action = QAction("Quit", self)
         self.quit_action.setStatusTip("Quit")
         self.quit_action.setShortcut(QKeySequence("Ctrl+q"))
@@ -272,6 +277,7 @@ class MyWidget(QtWidgets.QMainWindow):
 
         file_menu: QMenu = menu.addMenu("&File")
         file_menu.addAction(self.load_action)
+        file_menu.addAction(self.load_folder_action)
         file_menu.addSeparator()
         file_menu.addAction(self.quit_action)
 
@@ -491,34 +497,56 @@ class MyWidget(QtWidgets.QMainWindow):
         self.delete_selected_items()
 
     @ QtCore.Slot()
+    def load_folder_clicked(self):
+        if not self.thread.running:
+            if self.config.has_option("files", "last_open_path"):
+                last_open_path = self.config["files"]["last_open_path"]
+
+                dir = QFileDialog.getExistingDirectory(
+                    self, ("Open music folder"), last_open_path, QFileDialog.ShowDirsOnly)
+
+                # os.getcwd()
+
+                it = QDirIterator(
+                    dir, QDirIterator.Subdirectories | QDirIterator.FollowSymlinks)
+
+                while it.hasNext():
+                    print(it.next())
+
+                # QDirIterator it(dir, QStringList() << "*.jpg", QDir::Files, QDirIterator::Subdirectories);
+                # while (it.hasNext())
+                    # qDebug() << it.next();
+
+    @ QtCore.Slot()
     def load_clicked(self):
-        if self.config.has_option("files", "last_open_path"):
-            last_open_path = self.config["files"]["last_open_path"]
+        if not self.thread.running:
+            if self.config.has_option("files", "last_open_path"):
+                last_open_path = self.config["files"]["last_open_path"]
 
-            filenames, filter = QFileDialog.getOpenFileNames(
-                self, caption="Load music file", dir=last_open_path)
-        else:
-            filenames, filter = QFileDialog.getOpenFileNames(
-                self, caption="Load music file")
+                filenames, filter = QFileDialog.getOpenFileNames(
+                    self, caption="Load music file", dir=last_open_path)
+            else:
+                filenames, filter = QFileDialog.getOpenFileNames(
+                    self, caption="Load music file")
 
-        if filenames:
-            filename: str = ""
+            if filenames:
+                filename: str = ""
 
-            progress = QProgressDialog(
-                "Scanning files...", "Cancel", 0, len(filenames), self)
-            progress.setWindowModality(QtCore.Qt.WindowModal)
+                progress = QProgressDialog(
+                    "Scanning files...", "Cancel", 0, len(filenames), self)
+                progress.setWindowModality(QtCore.Qt.WindowModal)
 
-            for i, filename in enumerate(filenames):
-                progress.setValue(i)
-                if progress.wasCanceled():
-                    break
+                for i, filename in enumerate(filenames):
+                    progress.setValue(i)
+                    if progress.wasCanceled():
+                        break
 
-                self.load_file(filename)
+                    self.load_file(filename)
 
-            progress.setValue(len(filenames))
+                progress.setValue(len(filenames))
 
-            self.config["files"]["last_open_path"] = os.path.dirname(
-                os.path.abspath(filename))
+                self.config["files"]["last_open_path"] = os.path.dirname(
+                    os.path.abspath(filename))
 
     @ QtCore.Slot()
     def play_clicked(self):
