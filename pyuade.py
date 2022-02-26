@@ -153,6 +153,9 @@ class MyWidget(QtWidgets.QMainWindow):
                 if current_item_row >= 0 and current_item_row < self.model.rowCount(self.tree.rootIndex()) - 1:
                     self.current_row = current_item_row
 
+                    self.tree.selectionModel().select(self.model.index(self.current_row, 0),
+                                                      QItemSelectionModel.SelectCurrent | QItemSelectionModel.Rows)
+
             # Column width
 
             for c in range(self.model.columnCount()):
@@ -407,6 +410,7 @@ class MyWidget(QtWidgets.QMainWindow):
         self.tray.setToolTip(f"Playing {song.song_file.filename}")
 
         self.play_action.setIcon(QIcon("pause.svg"))
+        self.load_action.setEnabled(False)
 
     def play_file_thread(self, song: Song) -> None:
         self.thread.current_song = song
@@ -422,6 +426,7 @@ class MyWidget(QtWidgets.QMainWindow):
         self.time.setText("00:00")
         self.time_total.setText("00:00")
         self.play_action.setIcon(QIcon("play.svg"))
+        self.load_action.setEnabled(True)
 
     def play_next_item(self) -> None:
 
