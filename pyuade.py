@@ -1,6 +1,7 @@
 import datetime
 from enum import IntEnum
 from genericpath import exists
+import glob
 import os
 import sys
 import ntpath
@@ -8,9 +9,9 @@ import ntpath
 # import sounddevice as sd
 # import soundfile as sf
 from PySide6 import QtCore, QtWidgets
-from PySide6.QtCore import QCoreApplication, QDirIterator, QEvent, QSize, QThread, QModelIndex, QItemSelectionModel
-from PySide6.QtWidgets import QAbstractItemView, QFileDialog, QLabel, QMenu, QProgressDialog, QSlider, QStatusBar, QStyleOption, QSystemTrayIcon, QToolBar, QTreeView
-from PySide6.QtGui import QAction, QBrush, QColor, QIcon, QKeySequence, QPainter, QPen, QStandardItem, QStandardItemModel
+from PySide6.QtCore import QCoreApplication, QDirIterator, QEvent, QPoint, QRect, QSize, QThread, QModelIndex, QItemSelectionModel
+from PySide6.QtWidgets import QAbstractItemView, QFileDialog, QLabel, QLineEdit, QMenu, QProgressDialog, QSlider, QStatusBar, QStyleOption, QSystemTrayIcon, QTabWidget, QToolBar, QTreeView, QWidget
+from PySide6.QtGui import QAction, QBrush, QColor, QIcon, QKeyEvent, QKeySequence, QMouseEvent, QPainter, QPen, QStandardItem, QStandardItemModel
 import debugpy
 import configparser
 from appdirs import *
@@ -49,10 +50,13 @@ class PlayerThread(QThread):
         uade.stop()
 
 
-class MyTreeView(QTreeView):
+class PlaylistTreeView(QTreeView):
     def __init__(self, parent=None):
-        super(MyTreeView, self).__init__(parent)
+        super(PlaylistTreeView, self).__init__(parent)
         self.dropIndicatorRect = QtCore.QRect()
+
+        # Currently playing row for this tab
+        self.current_row: int = 0
 
     def paintEvent(self, event):
         painter = QPainter(self.viewport())
@@ -78,7 +82,7 @@ class MyTreeView(QTreeView):
                 painter.setPen(pen)
                 painter.drawRect(rect)
 
-# class MyTreeWidget(QTreeWidget, MyTreeView):
+# class MyTreeWidget(QTreeWidget, PlaylistTreeView):
 
 
 class TREEVIEWCOL(IntEnum):
@@ -90,11 +94,63 @@ class TREEVIEWCOL(IntEnum):
     SUBSONG = 5
 
 
+class PlaylistTabBarEdit(QtWidgets.QLineEdit):
+    def __init__(self, parent, rect: QRect) -> None:
+        super().__init__(parent)
+
+        self.setGeometry(rect)
+        self.textChanged.connect(parent.tabBar().rename)
+        self.editingFinished.connect(parent.tabBar().editing_finished)
+        self.returnPressed.connect(self.close)
+
+    def keyPressEvent(self, event: QKeyEvent):
+        if event.key() == QtCore.Qt.Key_Escape:
+            self.close()
+
+        super().keyPressEvent(event)
+
+
+class PlaylistTabBar(QtWidgets.QTabBar):
+    def __init__(self, parent) -> None:
+        super().__init__(parent)
+
+        self.edit_text = ""
+        self.edit_index = 0
+        self.setMovable(True)
+
+    @ QtCore.Slot()
+    def rename(self, text) -> None:
+        self.edit_text = text
+
+    @ QtCore.Slot()
+    def editing_finished(self) -> None:
+        self.setTabText(self.edit_index, self.edit_text)
+
+
+class PlaylistTab(QtWidgets.QTabWidget):
+    def __init__(self, parent) -> None:
+        super().__init__(parent)
+
+        tab = PlaylistTabBar(parent)
+        self.setTabBar(tab)
+
+        self.tabBarDoubleClicked.connect(self.doubleClicked)
+
+    @ QtCore.Slot()
+    def doubleClicked(self, index) -> None:
+        self.tabBar().edit_index = index
+        edit = PlaylistTabBarEdit(self, self.tabBar().tabRect(index))
+        edit.show()
+        edit.setFocus()
+
+
 class MyWidget(QtWidgets.QMainWindow):
     def __init__(self) -> None:
         super().__init__()
 
         self.setup_gui()
+
+        self.current_tab = 0
 
         self.thread = PlayerThread(self)
         self.appname = "pyuade"
@@ -109,10 +165,10 @@ class MyWidget(QtWidgets.QMainWindow):
         self.timeline.sliderPressed.connect(self.timeline_pressed)
         self.timeline.sliderReleased.connect(self.timeline_released)
 
-        self.current_row: int = 0
         self.timeline_tracking: bool = True
 
-        self.current_selection = QItemSelectionModel(self.model)
+        self.current_selection = QItemSelectionModel(
+            self.get_current_tab().model())
 
         # List of loaded song files for saving the playlist
         # self.song_files: list[SongFile] = []
@@ -125,18 +181,21 @@ class MyWidget(QtWidgets.QMainWindow):
 
     def read_config(self) -> None:
 
-        # Read song files and playlist
-        # TODO: do this using md5 of song files
+        # Read playlists
+        # TODO: do this using md5 of song files?
 
-        # if exists(user_config_dir(self.appname) + '/songfiles.json'):
-        #     with open(user_config_dir(self.appname) + '/songfiles.json', 'r') as playlist:
-        #         self.song_files = jsonpickle.decode(playlist.read())
+        playlists = glob.glob(user_config_dir(
+            self.appname) + "/playlist-*.json")
+        playlists.sort()
 
-        if exists(user_config_dir(self.appname) + '/playlist.json'):
-            with open(user_config_dir(self.appname) + '/playlist.json', 'r') as playlist:
+        for i, pfile in enumerate(playlists):
+            with open(pfile, 'r') as playlist:
                 playlist: list[Song] = jsonpickle.decode(playlist.read())
 
             if playlist:
+                self.load_tab(str(i))
+                self.playlist_tabs.setCurrentIndex(i)
+
                 for p in playlist:
                     self.load_song(p)
 
@@ -144,6 +203,7 @@ class MyWidget(QtWidgets.QMainWindow):
 
         self.config["window"] = {}
         self.config["files"] = {}
+        self.config["playlists"] = {}
 
         if self.config.read(user_config_dir(self.appname) + '/config.ini'):
             self.resize(int(self.config["window"]["width"]),
@@ -152,18 +212,25 @@ class MyWidget(QtWidgets.QMainWindow):
             if self.config.has_option("files", "current_item"):
                 current_item_row = int(self.config["files"]["current_item"])
 
-                if current_item_row >= 0 and current_item_row < self.model.rowCount(self.tree.rootIndex()) - 1:
-                    self.current_row = current_item_row
+                if current_item_row >= 0 and current_item_row < self.get_current_tab().model().rowCount(self.get_current_tab().rootIndex()) - 1:
+                    self.get_current_tab().current_row = current_item_row
 
-                    self.tree.selectionModel().select(self.model.index(self.current_row, 0),
-                                                      QItemSelectionModel.SelectCurrent | QItemSelectionModel.Rows)
+                    self.get_current_tab().selectionModel().select(self.get_current_tab().model().index(self.get_current_tab().current_row, 0),
+                                                                   QItemSelectionModel.SelectCurrent | QItemSelectionModel.Rows)
 
             # Column width
 
-            for c in range(self.model.columnCount()):
+            for c in range(self.get_current_tab().model().columnCount()):
                 if self.config.has_option("window", "col" + str(c) + "_width"):
-                    self.tree.header().resizeSection(
+                    self.get_current_tab().header().resizeSection(
                         c, int(self.config["window"]["col" + str(c) + "_width"]))
+
+            # Playlist tab names
+
+            for t in range(self.playlist_tabs.count()):
+                if self.config.has_option("playlists", "playlist" + str(t)):
+                    self.playlist_tabs.setTabText(
+                        t, self.config["playlists"]["playlist" + str(t)])
 
     def write_config(self) -> None:
 
@@ -176,41 +243,42 @@ class MyWidget(QtWidgets.QMainWindow):
         if not user_config_path.exists():
             user_config_path.mkdir(parents=True)
 
-        if self.current_row >= 0:
+        if self.get_current_tab().current_row >= 0:
             self.config["files"]["current_item"] = str(
-                self.current_row)
+                self.get_current_tab().current_row)
+
+        for t in range(0, self.playlist_tabs.count()):
+            self.config["playlists"]["playlist" +
+                                     str(t)] = self.playlist_tabs.tabText(t)
 
         # Column width
 
-        for c in range(self.model.columnCount()):
+        for c in range(self.get_current_tab().model().columnCount()):
             self.config["window"]["col" + str(c) +
-                                  "_width"] = str(self.tree.columnWidth(c))
+                                  "_width"] = str(self.get_current_tab().columnWidth(c))
 
-        with open(user_config_dir(self.appname) + '/config.ini', 'w') as config_file:
+        with open(user_config_dir(self.appname) + "/config.ini", "w") as config_file:
             self.config.write(config_file)
 
-        if self.model.rowCount() > 0:
+        for t in range(0, self.playlist_tabs.count()):
+            tab = self.playlist_tabs.widget(t)
 
-            # Write song files
+            if tab.model().rowCount() > 0:
 
-            # if self.song_files:
-            #     with open(user_config_dir(self.appname) + '/songfiles.json', 'w') as song_files:
-            #         song_files.write(str(jsonpickle.encode(self.song_files)))
+                # Write playlist (referencing song files)
+                # TODO: do this using md5 of song files?
 
-            # Write playlist (referencing song files)
-            # TODO: do this using md5 of song files
+                with open(user_config_dir(self.appname) + "/playlist-" + str(t) + ".json", "w") as playlist:
+                    songs: list[Song] = []
 
-            with open(user_config_dir(self.appname) + '/playlist.json', 'w') as playlist:
-                songs: list[Song] = []
+                    for r in range(tab.model().rowCount()):
+                        song: Song = tab.model().itemFromIndex(
+                            tab.model().index(r, 0)).data(QtCore.Qt.UserRole)
 
-                for r in range(self.model.rowCount()):
-                    song: Song = self.model.itemFromIndex(
-                        self.model.index(r, 0)).data(QtCore.Qt.UserRole)
+                        songs.append(song)
 
-                    songs.append(song)
-
-                if songs:
-                    playlist.write(str(jsonpickle.encode(songs)))
+                    if songs:
+                        playlist.write(str(jsonpickle.encode(songs)))
 
     def setup_actions(self) -> None:
         self.load_action = QAction("Load", self)
@@ -289,43 +357,56 @@ class MyWidget(QtWidgets.QMainWindow):
         edit_menu = menu.addMenu("&Edit")
         edit_menu.addAction(self.delete_action)
 
+    def load_tab(self, name: str) -> None:
+        tree = PlaylistTreeView()
+        model = QStandardItemModel(0, len(TREEVIEWCOL))
+        model.setHorizontalHeaderLabels(self.labels)
+
+        tree.setModel(model)
+
+        tree.setSelectionMode(QTreeView.ExtendedSelection)
+        tree.setEditTriggers(QAbstractItemView.NoEditTriggers)
+
+        tree.doubleClicked.connect(self.item_double_clicked)
+        tree.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+        tree.customContextMenuRequested.connect(self.open_context_menu)
+
+        self.playlist_tabs.addTab(tree, name)
+
     def setup_gui(self) -> None:
+        # Columns
 
-        # Tree
-
-        self.tree = QtWidgets.QListWidget()
-
-        self.tree = MyTreeView()
-        self.model = QStandardItemModel(0, 4)
-
-        labels: list[str] = []
+        self.labels: list[str] = []
 
         for col in TREEVIEWCOL:
             match col:
                 case TREEVIEWCOL.FILENAME:
-                    labels.append("Filename")
+                    self.labels.append("Filename")
                 case TREEVIEWCOL.SONGNAME:
-                    labels.append("Songname")
+                    self.labels.append("Songname")
                 case TREEVIEWCOL.DURATION:
-                    labels.append("Duration")
+                    self.labels.append("Duration")
                 case TREEVIEWCOL.PLAYER:
-                    labels.append("Player")
+                    self.labels.append("Player")
                 case TREEVIEWCOL.PATH:
-                    labels.append("Path")
+                    self.labels.append("Path")
                 case TREEVIEWCOL.SUBSONG:
-                    labels.append("Subsong")
+                    self.labels.append("Subsong")
 
-        self.model.setHorizontalHeaderLabels(labels)
-        self.tree.setModel(self.model)
+        # Tree
 
-        self.setCentralWidget(self.tree)
+        # self.get_current_tab()s = list[QTreeView]
+        # self.models = list[QStandardItemModel]
 
-        self.tree.setSelectionMode(QTreeView.ExtendedSelection)
-        self.tree.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        # self.get_current_tab() = QtWidgets.QListWidget()
 
-        self.tree.doubleClicked.connect(self.item_double_clicked)
-        self.tree.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
-        self.tree.customContextMenuRequested.connect(self.open_menu)
+        self.playlist_tabs = PlaylistTab(self)
+
+        # self.load_tab("Tab 1")
+        # self.load_tab("Tab 2")
+
+        # self.setCentralWidget(self.get_current_tab())
+        self.setCentralWidget(self.playlist_tabs)
 
         self.setup_actions()
         self.setup_toolbar()
@@ -336,25 +417,34 @@ class MyWidget(QtWidgets.QMainWindow):
     def closeEvent(self, event: QEvent):
         self.write_config()
 
+    def get_current_tab(self) -> PlaylistTreeView:
+        return self.playlist_tabs.widget(self.playlist_tabs.tabBar().currentIndex())
+
     def open_menu(self, position: int) -> None:
+        # Song context menu
+
         menu = QMenu()
         menu.addAction(self.delete_action)
+        menu.addAction(self.lookup_msm_action)
+        menu.addAction(self.lookup_modland_action)
+        menu.addAction(self.sort_action)
 
-        menu.exec(self.tree.viewport().mapToGlobal(position))
+        menu.exec(self.get_current_tab().viewport().mapToGlobal(position))
 
     def delete_selected_items(self):
-        while self.tree.selectionModel().selectedRows(0):
-            idx: QModelIndex = self.tree.selectionModel().selectedRows(0)[0]
+        while self.get_current_tab().selectionModel().selectedRows(0):
+            idx: QModelIndex = self.get_current_tab(
+            ).selectionModel().selectedRows(0)[0]
 
             # TODO: rebuild
-            # if idx.row() == self.current_row:
-            #     self.current_row = self.tree.indexBelow(
-            #         self.current_row)
+            # if idx.row() == self.get_current_tab().current_row:
+            #     self.get_current_tab().current_row = self.get_current_tab().indexBelow(
+            #         self.get_current_tab().current_row)
 
-            self.model.removeRow(idx.row(), idx.parent())
+            self.get_current_tab().model().removeRow(idx.row(), idx.parent())
 
     def keyPressEvent(self, event: QEvent):
-        if self.tree.selectionModel().selectedRows(0):
+        if self.get_current_tab().selectionModel().selectedRows(0):
             if event.key() == QtCore.Qt.Key_Delete:
                 self.delete_selected_items()
 
@@ -369,9 +459,10 @@ class MyWidget(QtWidgets.QMainWindow):
         QCoreApplication.quit()
 
     @ QtCore.Slot()
-    def item_double_clicked(self, index: QModelIndex):
 
-        self.play(self.tree.selectedIndexes()[0].row())
+    @ QtCore.Slot()
+    def item_double_clicked(self, index: QModelIndex):
+        self.play(self.get_current_tab().selectedIndexes()[0].row())
 
     def play(self, row: int):
         if self.thread.running:
@@ -379,16 +470,16 @@ class MyWidget(QtWidgets.QMainWindow):
 
         # Get song from user data in column
 
-        song: Song = self.model.itemFromIndex(
-            self.model.index(row, 0)).data(QtCore.Qt.UserRole)
+        song: Song = self.get_current_tab().model().itemFromIndex(
+            self.get_current_tab().model().index(row, 0)).data(QtCore.Qt.UserRole)
 
         self.play_file_thread(song)
-        self.current_row = row
+        self.get_current_tab().current_row = row
 
         # Select playing track
 
-        self.tree.selectionModel().select(self.model.index(self.current_row, 0),
-                                          QItemSelectionModel.SelectCurrent | QItemSelectionModel.Rows)
+        self.get_current_tab().selectionModel().select(self.get_current_tab().model().index(self.get_current_tab().current_row, 0),
+                                                       QItemSelectionModel.SelectCurrent | QItemSelectionModel.Rows)
 
         self.timeline.setMaximum(song.subsong.bytes)
         self.time_total.setText(str(datetime.timedelta(
@@ -396,8 +487,8 @@ class MyWidget(QtWidgets.QMainWindow):
 
         # Set current song (for pausing)
 
-        self.current_selection.setCurrentIndex(self.model.index(
-            self.current_row, 0), QItemSelectionModel.SelectCurrent)
+        self.current_selection.setCurrentIndex(self.get_current_tab().model().index(
+            self.get_current_tab().current_row, 0), QItemSelectionModel.SelectCurrent)
         self.thread.current_song = song
 
         # Notification
@@ -441,13 +532,13 @@ class MyWidget(QtWidgets.QMainWindow):
         row = index.row()
 
         # current_index actually lists all columns, so for now just take the first col
-        if row < self.model.rowCount(self.tree.rootIndex()) - 1:
+        if row < self.get_current_tab().model().rowCount(self.get_current_tab().rootIndex()) - 1:
             self.play(row + 1)
 
     def play_previous_item(self) -> None:
         # current_index actually lists all columns, so for now just take the first col
-        if self.current_row > 0:
-            self.play(self.current_row - 1)
+        if self.get_current_tab().current_row > 0:
+            self.play(self.get_current_tab().current_row - 1)
 
     def load_song(self, song: Song) -> None:
         # Add subsong to playlist
@@ -475,7 +566,7 @@ class MyWidget(QtWidgets.QMainWindow):
                 case TREEVIEWCOL.SUBSONG:
                     tree_rows.append(QStandardItem(str(song.subsong.nr)))
 
-        self.model.appendRow(tree_rows)
+        self.get_current_tab().model().appendRow(tree_rows)
 
     def load_file(self, filename: str) -> None:
         try:
@@ -565,7 +656,7 @@ class MyWidget(QtWidgets.QMainWindow):
 
     @ QtCore.Slot()
     def play_clicked(self):
-        if self.model.rowCount(self.tree.rootIndex()) > 0:
+        if self.get_current_tab().model().rowCount(self.get_current_tab().rootIndex()) > 0:
             if self.thread.running:
                 if self.thread.paused:
                     self.thread.paused = False
