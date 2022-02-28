@@ -414,6 +414,9 @@ class MyWidget(QtWidgets.QMainWindow):
         self.play_action.setIcon(QIcon("pause.svg"))
         self.load_action.setEnabled(False)
 
+        self.setWindowTitle("pyuade - " + song.song_file.modulename +
+                            " - " + song.song_file.filename)
+
     def play_file_thread(self, song: Song) -> None:
         self.thread.current_song = song
         self.thread.start()
@@ -429,6 +432,7 @@ class MyWidget(QtWidgets.QMainWindow):
         self.time_total.setText("00:00")
         self.play_action.setIcon(QIcon("play.svg"))
         self.load_action.setEnabled(True)
+        self.setWindowTitle("pyuade")
 
     def play_next_item(self) -> None:
 
