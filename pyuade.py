@@ -738,7 +738,12 @@ class MyWidget(QtWidgets.QMainWindow):
 
         notification = Notify()
         notification.title = "Now playing"
-        notification.message = song.song_file.filename
+        notification.message = ""
+        if song.song_file.author:
+            notification.message += song.song_file.author + " — "
+        if song.song_file.modulename:
+            notification.message += song.song_file.modulename + " — "
+        notification.message += song.song_file.filename
         notification.icon = "play.svg"
         notification.send(block=False)
 
