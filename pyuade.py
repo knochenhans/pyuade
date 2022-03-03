@@ -25,27 +25,31 @@ from uade import *
 uade = Uade()
 
 
+class PLAYERTHREADSTATUS(Enum):
+    PLAYING = 0,
+    PAUSED = 1,
+    STOPPED = 2
+
+
 class PlayerThread(QThread):
     def __init__(self, parent) -> None:
         super().__init__(parent)
 
-        self.running = False
-        self.paused = False
+        self.status = PLAYERTHREADSTATUS.STOPPED
         self.current_song: Song
 
     def run(self):
         debugpy.debug_this_thread()
         uade.prepare_play(self.current_song)
 
-        while self.running:
-            if not self.paused:
-                try:
-                    if not uade.play_threaded():
-                        self.running = False
-                except EOFError:
-                    self.running = False
-                except Exception:
-                    self.running = False
+        while self.status == PLAYERTHREADSTATUS.PLAYING:
+            try:
+                if not uade.play_threaded():
+                    self.status = PLAYERTHREADSTATUS.STOPPED
+            except EOFError:
+                self.status = PLAYERTHREADSTATUS.STOPPED
+            except Exception:
+                self.status = PLAYERTHREADSTATUS.STOPPED
 
         uade.stop()
 
@@ -454,7 +458,7 @@ class MyWidget(QtWidgets.QMainWindow):
 
     @ QtCore.Slot()
     def quit_clicked(self):
-        self.stop()
+        self.stop(False)
         self.thread.wait()
         QCoreApplication.quit()
 
@@ -465,8 +469,8 @@ class MyWidget(QtWidgets.QMainWindow):
         self.play(self.get_current_tab().selectedIndexes()[0].row())
 
     def play(self, row: int):
-        if self.thread.running:
-            self.stop()
+        if self.thread.status == PLAYERTHREADSTATUS.PLAYING:
+            self.stop(False)
 
         # Get song from user data in column
 
@@ -511,19 +515,21 @@ class MyWidget(QtWidgets.QMainWindow):
     def play_file_thread(self, song: Song) -> None:
         self.thread.current_song = song
         self.thread.start()
-        self.thread.running = True
+        self.thread.status = PLAYERTHREADSTATUS.PLAYING
 
-    def stop(self) -> None:
-        self.thread.running = False
-        self.thread.paused = False
+    def stop(self, pause_thread: bool) -> None:
+        if pause_thread:
+            self.thread.status = PLAYERTHREADSTATUS.PAUSED
+        else:
+            self.thread.status = PLAYERTHREADSTATUS.STOPPED
+            self.timeline.setSliderPosition(0)
+            self.time.setText("00:00")
+            self.time_total.setText("00:00")
+            self.setWindowTitle("pyuade")
         self.thread.quit()
         self.thread.wait()
-        self.timeline.setSliderPosition(0)
-        self.time.setText("00:00")
-        self.time_total.setText("00:00")
         self.play_action.setIcon(QIcon("play.svg"))
         self.load_action.setEnabled(True)
-        self.setWindowTitle("pyuade")
 
     def play_next_item(self) -> None:
 
@@ -583,11 +589,12 @@ class MyWidget(QtWidgets.QMainWindow):
 
     @ QtCore.Slot()
     def timeline_update(self, bytes: int) -> None:
-        if self.timeline_tracking:
-            self.timeline.setValue(bytes)
+        if self.thread.status == PLAYERTHREADSTATUS.PLAYING:
+            if self.timeline_tracking:
+                self.timeline.setValue(bytes)
 
-        self.time.setText(str(datetime.timedelta(
-            seconds=bytes/176400)).split(".")[0])
+            self.time.setText(str(datetime.timedelta(
+                seconds=bytes/176400)).split(".")[0])
 
     @ QtCore.Slot()
     def timeline_pressed(self):
@@ -604,7 +611,7 @@ class MyWidget(QtWidgets.QMainWindow):
 
     @ QtCore.Slot()
     def load_folder_clicked(self):
-        if not self.thread.running:
+        if not self.thread.status == PLAYERTHREADSTATUS.PLAYING:
             if self.config.has_option("files", "last_open_path"):
                 last_open_path = self.config["files"]["last_open_path"]
 
@@ -625,7 +632,7 @@ class MyWidget(QtWidgets.QMainWindow):
 
     @ QtCore.Slot()
     def load_clicked(self):
-        if not self.thread.running:
+        if not self.thread.status == PLAYERTHREADSTATUS.PLAYING:
             if self.config.has_option("files", "last_open_path"):
                 last_open_path = self.config["files"]["last_open_path"]
 
@@ -657,19 +664,22 @@ class MyWidget(QtWidgets.QMainWindow):
     @ QtCore.Slot()
     def play_clicked(self):
         if self.get_current_tab().model().rowCount(self.get_current_tab().rootIndex()) > 0:
-            if self.thread.running:
-                if self.thread.paused:
-                    self.thread.paused = False
+            match self.thread.status:
+                case PLAYERTHREADSTATUS.PLAYING:
+                    # Play -> pause
+                    self.stop(True)
+                case PLAYERTHREADSTATUS.PAUSED:
+                    # Pause -> play
+                    self.play(self.get_current_tab().current_row)
+                    uade.seek(self.timeline.sliderPosition())
                     self.play_action.setIcon(QIcon("pause.svg"))
-                else:
-                    self.thread.paused = True
-                    self.play_action.setIcon(QIcon("play.svg"))
-            else:
-                self.play(self.current_row)
+                case (PLAYERTHREADSTATUS.PAUSED | PLAYERTHREADSTATUS.STOPPED):
+                    # Play when stopped or paused
+                    self.play(self.get_current_tab().current_row)
 
     @ QtCore.Slot()
     def stop_clicked(self):
-        self.stop()
+        self.stop(False)
 
     @ QtCore.Slot()
     def prev_clicked(self):
@@ -682,7 +692,7 @@ class MyWidget(QtWidgets.QMainWindow):
     @ QtCore.Slot()
     def item_finished(self):
         print(f"End of {self.thread.current_song.song_file.filename} reached")
-        self.stop()
+        self.stop(False)
         self.play_next_item()
 
 
