@@ -5,6 +5,7 @@ import glob
 import os
 import sys
 import ntpath
+from xml.etree import ElementTree
 # import numpy as np
 # import sounddevice as sd
 # import soundfile as sf
@@ -18,6 +19,11 @@ from appdirs import *
 from pathlib import Path
 from notifypy import Notify
 import jsonpickle
+import hashlib
+import webbrowser
+import requests
+from bs4 import BeautifulSoup
+import re
 
 from ctypes_functions import *
 from uade import *
@@ -96,6 +102,7 @@ class TREEVIEWCOL(IntEnum):
     PLAYER = 3
     PATH = 4
     SUBSONG = 5
+    AUTHOR = 6
 
 
 class PlaylistTabBarEdit(QtWidgets.QLineEdit):
@@ -320,6 +327,10 @@ class MyWidget(QtWidgets.QMainWindow):
         self.delete_action.setStatusTip("Delete")
         self.delete_action.triggered.connect(self.delete_clicked)
 
+        self.modarchive_action = QAction("Modarchive", self)
+        self.modarchive_action.setStatusTip("Modarchive")
+        self.modarchive_action.triggered.connect(self.scrape_modarchive)
+
         # self.test_action = QAction("Test", self)
         # self.test_action.setStatusTip("Test")
         # self.test_action.triggered.connect(self.test_clicked)
@@ -396,6 +407,8 @@ class MyWidget(QtWidgets.QMainWindow):
                     self.labels.append("Path")
                 case TREEVIEWCOL.SUBSONG:
                     self.labels.append("Subsong")
+                case TREEVIEWCOL.AUTHOR:
+                    self.labels.append("Author")
 
         # Tree
 
@@ -424,7 +437,7 @@ class MyWidget(QtWidgets.QMainWindow):
     def get_current_tab(self) -> PlaylistTreeView:
         return self.playlist_tabs.widget(self.playlist_tabs.tabBar().currentIndex())
 
-    def open_menu(self, position: int) -> None:
+    def open_context_menu(self, position: int) -> None:
         # Song context menu
 
         menu = QMenu()
@@ -432,6 +445,7 @@ class MyWidget(QtWidgets.QMainWindow):
         menu.addAction(self.lookup_msm_action)
         menu.addAction(self.lookup_modland_action)
         menu.addAction(self.sort_action)
+        menu.addAction(self.modarchive_action)
 
         menu.exec(self.get_current_tab().viewport().mapToGlobal(position))
 
@@ -455,6 +469,172 @@ class MyWidget(QtWidgets.QMainWindow):
     # @ QtCore.Slot()
     # def test_clicked(self):
     #     uade.seek(self.timeline.value() * 2)
+
+    @ QtCore.Slot()
+    def scrape_modarchive(self) -> None:
+        indexes = self.get_current_tab().selectionModel().selectedRows(0)
+
+        for index in indexes:
+
+            row = index.row()
+
+            song: Song = self.get_current_tab().model().itemFromIndex(
+                self.get_current_tab().model().index(row, 0)).data(QtCore.Qt.UserRole)
+
+            license = Path(user_config_dir(
+                self.appname) + "/modarchive-api.key")
+
+            if license.exists():
+                with open(license, 'r') as f:
+                    api_key = f.read()
+
+                    md5 = hashlib.md5()
+
+                    print(
+                        f"Looking up {song.song_file.filename} in ModArchive.")
+
+                    with open(song.song_file.filename, 'rb') as f:
+                        data = f.read()
+
+                        if data:
+                            md5.update(data)
+
+                            md5_request = "request=search&type=hash&query=" + md5.hexdigest()
+
+                            query = f"https://modarchive.org/data/xml-tools.php?key={api_key}&{md5_request}"
+
+                            response = requests.get(query)
+
+                            xml_tree = ElementTree.fromstring(response.content)
+
+                            xml_module = xml_tree.find("module")
+
+                            if xml_module:
+                                if int(xml_tree.find("results").text) > 0:
+                                    print(
+                                        f"ModArchive Metadata found for {song.song_file.filename}.")
+                                    xml_artist_info = xml_module.find(
+                                        "artist_info")
+
+                                    for artist_idx in range(int(xml_artist_info.find("artists").text)):
+                                        xml_artist = xml_artist_info.find(
+                                            "artist")
+
+                                        song.song_file.author = xml_artist.find(
+                                            "alias").text
+
+                                        print(
+                                            f"Artist {song.song_file.author} found for {song.song_file.filename}.")
+
+                                else:
+                                    print(
+                                        f"More than 1 results for md5 of {song.song_file.filename} found!")
+
+                            else:
+                                print(
+                                    f"No ModArchive results found for {song.song_file.filename}!")
+            else:
+                print(f"No modarchive-api.key found in config folder!")
+
+    @ QtCore.Slot()
+    def scrape_modland(self, song: Song, column: str) -> str:
+        md5 = hashlib.md5()
+
+        with open(song.song_file.filename, 'rb') as f:
+            data = f.read()
+
+            if data:
+                md5.update(data)
+
+                url = "https://www.exotica.org.uk/mediawiki/index.php?title=Special%3AModland&md=qsearch&qs=" + md5.hexdigest()
+
+                response = requests.get(url)
+                if response.status_code == 200:
+                    website = requests.get(url)
+                    results = BeautifulSoup(website.content, 'html5lib')
+
+                    table = results.find('table', id="ml_resultstable")
+                    if table:
+                        search_results = table.find('caption')
+
+                        pattern = re.compile(
+                            "^Search - ([0-9]+) result.*?$")
+                        match = pattern.match(search_results.text)
+                        if match:
+                            if int(match.group(1)) > 0:
+                                # webbrowser.open(url, new=2)
+                                table_body = table.find('tbody')
+
+                                author_col_nr = -1
+
+                                # Find out which row contains author (just to make a little more flexible)
+
+                                table_rows = table_body.find_all('tr')
+                                for table_row in table_rows:
+                                    cols = table_row.find_all('th')
+
+                                    for c, col in enumerate(cols):
+                                        header_name = col.find("a")
+
+                                        if header_name.text.strip() == column:
+                                            author_col_nr = c
+                                            break
+
+                                    if author_col_nr >= 0:
+                                        tds = table_row.find_all('td')
+
+                                        if tds:
+                                            td = tds[author_col_nr]
+                                            return td.find("a").text.strip()
+        return ""
+
+    @ QtCore.Slot()
+    def lookup_modland_clicked(self):
+        # Experimental lookup in modland database
+
+        indexes = self.get_current_tab().selectionModel().selectedRows(0)
+
+        for index in indexes:
+
+            row = index.row()
+
+            song: Song = self.get_current_tab().model().itemFromIndex(
+                self.get_current_tab().model().index(row, 0)).data(QtCore.Qt.UserRole)
+
+            song.song_file.author = self.scrape_modland(song, "Author(s)")
+
+            self.get_current_tab().model().itemFromIndex(self.get_current_tab().model().index(
+                row, TREEVIEWCOL.AUTHOR)).setText(song.song_file.author)
+
+    @ QtCore.Slot()
+    def lookup_msm_clicked(self):
+        # Experimental lookup in .Mod Sample Master database
+        row = self.get_current_tab().selectedIndexes()[0].row()
+
+        song: Song = self.get_current_tab().model().itemFromIndex(
+            self.get_current_tab().model().index(row, 0)).data(QtCore.Qt.UserRole)
+
+        sha1 = hashlib.sha1()
+
+        with open(song.song_file.filename, 'rb') as f:
+            data = f.read()
+
+            if data:
+                sha1.update(data)
+
+                url = "https://modsamplemaster.thegang.nu/module.php?sha1=" + sha1.hexdigest()
+
+                response = requests.get(url)
+                if response.status_code == 200:
+                    website = requests.get(url)
+                    results = BeautifulSoup(website.content, 'html5lib')
+
+                    page = results.find('div', class_='page')
+                    if page:
+                        name = page.find('h1')
+
+                        if name.text:
+                            webbrowser.open(url, new=2)
 
     @ QtCore.Slot()
     def quit_clicked(self):
@@ -571,6 +751,8 @@ class MyWidget(QtWidgets.QMainWindow):
                     tree_rows.append(QStandardItem(song.song_file.filename))
                 case TREEVIEWCOL.SUBSONG:
                     tree_rows.append(QStandardItem(str(song.subsong.nr)))
+                case TREEVIEWCOL.AUTHOR:
+                    tree_rows.append(QStandardItem(song.song_file.author))
 
         self.get_current_tab().model().appendRow(tree_rows)
 
