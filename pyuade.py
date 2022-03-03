@@ -71,7 +71,7 @@ class SongInfoDialog(QDialog):
                 idx, 1, QTableWidgetItem(attributes[attribute]))
 
 
-class PLAYERTHREADSTATUS(Enum):
+class PLAYERTHREADSTATUS(IntEnum):
     PLAYING = 0,
     PAUSED = 1,
     STOPPED = 2
