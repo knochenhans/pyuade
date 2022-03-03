@@ -11,7 +11,7 @@ from xml.etree import ElementTree
 # import soundfile as sf
 from PySide6 import QtCore, QtWidgets
 from PySide6.QtCore import QCoreApplication, QDirIterator, QEvent, QPoint, QRect, QSize, QThread, QModelIndex, QItemSelectionModel
-from PySide6.QtWidgets import QAbstractItemView, QFileDialog, QLabel, QLineEdit, QMenu, QProgressDialog, QSlider, QStatusBar, QStyleOption, QSystemTrayIcon, QTabWidget, QToolBar, QTreeView, QWidget
+from PySide6.QtWidgets import QAbstractItemView, QDialog, QDialogButtonBox, QFileDialog, QHeaderView, QLabel, QLineEdit, QMenu, QProgressDialog, QSlider, QStatusBar, QStyleOption, QSystemTrayIcon, QTabWidget, QTableWidget, QTableWidgetItem, QToolBar, QTreeView, QVBoxLayout, QWidget
 from PySide6.QtGui import QAction, QBrush, QColor, QIcon, QKeyEvent, QKeySequence, QMouseEvent, QPainter, QPen, QStandardItem, QStandardItemModel
 import debugpy
 import configparser
@@ -29,6 +29,46 @@ from ctypes_functions import *
 from uade import *
 
 uade = Uade()
+
+
+class SongInfoDialog(QDialog):
+    def __init__(self, song: Song):
+        super().__init__()
+
+        attributes = {}
+
+        attributes["Author"] = song.song_file.author
+        attributes["Filename"] = song.song_file.filename
+        attributes["Format"] = song.song_file.formatname
+        attributes["Extension"] = song.song_file.ext
+        attributes["Size (Bytes)"] = str(song.song_file.modulebytes)
+        attributes["md5"] = song.song_file.modulemd5
+        attributes["Player"] = song.song_file.playername
+        attributes["Player filename"] = song.song_file.playerfname
+
+        self.setWindowTitle("Song info")
+
+        QBtn = QDialogButtonBox.Close
+
+        self.buttonBox = QDialogButtonBox(QBtn)
+        self.buttonBox.rejected.connect(self.close)
+
+        self.layout = QVBoxLayout()
+        # message = QLabel("Something happened, is that OK?")
+        # self.layout.addWidget(message)
+        # self.layout.addWidget(self.buttonBox)
+        tableWidget = QTableWidget(self)
+        tableWidget.setRowCount(len(attributes))
+        tableWidget.setColumnCount(2)
+        tableWidget.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.layout.addWidget(tableWidget)
+
+        self.setLayout(self.layout)
+
+        for idx, attribute in enumerate(attributes):
+            tableWidget.setItem(idx, 0, QTableWidgetItem(attribute))
+            tableWidget.setItem(
+                idx, 1, QTableWidgetItem(attributes[attribute]))
 
 
 class PLAYERTHREADSTATUS(Enum):
@@ -331,6 +371,10 @@ class MyWidget(QtWidgets.QMainWindow):
         self.modarchive_action.setStatusTip("Modarchive")
         self.modarchive_action.triggered.connect(self.scrape_modarchive)
 
+        self.songinfo_action = QAction("Show song info", self)
+        self.songinfo_action.setStatusTip("Show song info")
+        self.songinfo_action.triggered.connect(self.show_songinfo)
+
         # self.test_action = QAction("Test", self)
         # self.test_action.setStatusTip("Test")
         # self.test_action.triggered.connect(self.test_clicked)
@@ -446,6 +490,7 @@ class MyWidget(QtWidgets.QMainWindow):
         menu.addAction(self.lookup_modland_action)
         menu.addAction(self.sort_action)
         menu.addAction(self.modarchive_action)
+        menu.addAction(self.songinfo_action)
 
         menu.exec(self.get_current_tab().viewport().mapToGlobal(position))
 
@@ -469,6 +514,20 @@ class MyWidget(QtWidgets.QMainWindow):
     # @ QtCore.Slot()
     # def test_clicked(self):
     #     uade.seek(self.timeline.value() * 2)
+
+    @ QtCore.Slot()
+    def show_songinfo(self) -> None:
+        index = self.get_current_tab().selectionModel().selectedRows(0)[0]
+
+        row = index.row()
+
+        song: Song = self.get_current_tab().model().itemFromIndex(
+            self.get_current_tab().model().index(row, 0)).data(QtCore.Qt.UserRole)
+
+        dialog = SongInfoDialog(song)
+        dialog.setWindowTitle(f"Song info for {song.song_file.filename}")
+        dialog.resize(700, 300)
+        dialog.exec()
 
     @ QtCore.Slot()
     def scrape_modarchive(self) -> None:
