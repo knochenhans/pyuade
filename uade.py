@@ -27,6 +27,7 @@ class SongFile():
         self.playerfname: str = ""
         self.playername: str = ""
         self.subsongs_min: int = 0
+        self.author: str = ""
 
         self.custom: bool
         self.content: bool

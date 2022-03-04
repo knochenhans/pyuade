@@ -54,9 +54,7 @@ class SongInfoDialog(QDialog):
         self.buttonBox.rejected.connect(self.close)
 
         self.layout = QVBoxLayout()
-        # message = QLabel("Something happened, is that OK?")
-        # self.layout.addWidget(message)
-        # self.layout.addWidget(self.buttonBox)
+
         tableWidget = QTableWidget(self)
         tableWidget.setRowCount(len(attributes))
         tableWidget.setColumnCount(2)
@@ -84,8 +82,13 @@ class PlayerThread(QThread):
         self.status = PLAYERTHREADSTATUS.STOPPED
         self.current_song: Song
 
+    def debugger_is_active(self) -> bool:
+        gettrace = getattr(sys, 'gettrace', lambda: None)
+        return gettrace() is not None
+
     def run(self):
-        debugpy.debug_this_thread()
+        if self.debugger_is_active():
+            debugpy.debug_this_thread()
         uade.prepare_play(self.current_song)
 
         while self.status == PLAYERTHREADSTATUS.PLAYING:
