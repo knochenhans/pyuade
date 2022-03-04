@@ -239,16 +239,19 @@ class MyWidget(QtWidgets.QMainWindow):
             self.appname) + "/playlist-*.json")
         playlists.sort()
 
-        for i, pfile in enumerate(playlists):
-            with open(pfile, 'r') as playlist:
-                playlist: list[Song] = jsonpickle.decode(playlist.read())
+        if len(playlists) > 0:
+            for i, pfile in enumerate(playlists):
+                with open(pfile, 'r') as playlist:
+                    playlist: list[Song] = jsonpickle.decode(playlist.read())
 
-            if playlist:
-                self.load_tab(str(i))
-                self.playlist_tabs.setCurrentIndex(i)
+                if playlist:
+                    self.load_tab(str(i))
+                    self.playlist_tabs.setCurrentIndex(i)
 
-                for p in playlist:
-                    self.load_song(p)
+                    for p in playlist:
+                        self.load_song(p)
+        else:
+            self.load_tab("Default")
 
         # Read config
 
