@@ -28,8 +28,9 @@ import re
 from ctypes_functions import *
 from uade import *
 
-uade = Uade()
+path = os.path.dirname(os.path.realpath(__file__))
 
+uade = Uade()
 
 class SongInfoDialog(QDialog):
     def __init__(self, song: Song):
@@ -227,11 +228,11 @@ class MyWidget(QtWidgets.QMainWindow):
         # List of loaded song files for saving the playlist
         # self.song_files: list[SongFile] = []
 
-        self.tray = QSystemTrayIcon(QIcon("play.svg"))
+        self.tray = QSystemTrayIcon(QIcon(path + "/play.svg"))
         # self.tray.setContextMenu(menu)
         self.tray.show()
 
-        self.setWindowIcon(QIcon("play.svg"))
+        self.setWindowIcon(QIcon(path + "/play.svg"))
 
     def read_config(self) -> None:
 
@@ -353,19 +354,19 @@ class MyWidget(QtWidgets.QMainWindow):
         self.quit_action.setShortcut(QKeySequence("Ctrl+q"))
         self.quit_action.triggered.connect(self.quit_clicked)
 
-        self.play_action = QAction(QIcon("play.svg"), "Play", self)
+        self.play_action = QAction(QIcon(path + "/play.svg"), "Play", self)
         self.play_action.setStatusTip("Play")
         self.play_action.triggered.connect(self.play_clicked)
 
-        self.stop_action = QAction(QIcon("stop.svg"), "Stop", self)
+        self.stop_action = QAction(QIcon(path + "/stop.svg"), "Stop", self)
         self.stop_action.setStatusTip("Stop")
         self.stop_action.triggered.connect(self.stop_clicked)
 
-        self.prev_action = QAction(QIcon("prev.svg"), "Prev", self)
+        self.prev_action = QAction(QIcon(path + "/prev.svg"), "Prev", self)
         self.prev_action.setStatusTip("Prev")
         self.prev_action.triggered.connect(self.prev_clicked)
 
-        self.next_action = QAction(QIcon("next.svg"), "Next", self)
+        self.next_action = QAction(QIcon(path + "/next.svg"), "Next", self)
         self.next_action.setStatusTip("Next")
         self.next_action.triggered.connect(self.next_clicked)
 
@@ -750,13 +751,13 @@ class MyWidget(QtWidgets.QMainWindow):
         if song.song_file.modulename:
             notification.message += song.song_file.modulename + " — "
         notification.message += song.song_file.filename
-        notification.icon = "play.svg"
+        notification.icon = path + "/play.svg"
         notification.send(block=False)
 
         print("Now playing " + song.song_file.filename)
         self.tray.setToolTip(f"Playing {song.song_file.filename}")
 
-        self.play_action.setIcon(QIcon("pause.svg"))
+        self.play_action.setIcon(QIcon(path + "/pause.svg"))
         self.load_action.setEnabled(False)
 
         self.setWindowTitle("pyuade - " + song.song_file.modulename +
@@ -778,7 +779,7 @@ class MyWidget(QtWidgets.QMainWindow):
             self.setWindowTitle("pyuade")
         self.thread.quit()
         self.thread.wait()
-        self.play_action.setIcon(QIcon("play.svg"))
+        self.play_action.setIcon(QIcon(path + "/play.svg"))
         self.load_action.setEnabled(True)
 
     def play_next_item(self) -> None:
@@ -924,7 +925,7 @@ class MyWidget(QtWidgets.QMainWindow):
                     # Pause -> play
                     self.play(self.get_current_tab().current_row)
                     uade.seek(self.timeline.sliderPosition())
-                    self.play_action.setIcon(QIcon("pause.svg"))
+                    self.play_action.setIcon(QIcon(path + "/pause.svg"))
                 case (PLAYERTHREADSTATUS.PAUSED | PLAYERTHREADSTATUS.STOPPED):
                     # Play when stopped or paused
                     self.play(self.get_current_tab().current_row)
