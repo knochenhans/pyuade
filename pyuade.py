@@ -245,15 +245,17 @@ class MyWidget(QtWidgets.QMainWindow):
 
         if len(playlists) > 0:
             for i, pfile in enumerate(playlists):
-                with open(pfile, 'r') as playlist:
-                    playlist: list[Song] = jsonpickle.decode(playlist.read())
+                self.load_tab(str(i))
+                self.playlist_tabs.setCurrentIndex(i)
 
-                if playlist:
-                    self.load_tab(str(i))
-                    self.playlist_tabs.setCurrentIndex(i)
+                if os.stat(pfile).st_size != 0:
+                    with open(pfile, 'r') as playlist:
+                        playlist: list[Song] = jsonpickle.decode(
+                            playlist.read())
 
-                    for p in playlist:
-                        self.load_song(p)
+                        if playlist:
+                            for p in playlist:
+                                self.load_song(p)
         else:
             self.load_tab("Default")
 
@@ -290,6 +292,21 @@ class MyWidget(QtWidgets.QMainWindow):
                     self.playlist_tabs.setTabText(
                         t, self.config["playlists"]["playlist" + str(t)])
 
+    def write_playlist(self, tab_nr: int) -> None:
+        tab = self.playlist_tabs.widget(tab_nr)
+
+        with open(user_config_dir(self.appname) + "/playlist-" + str(tab_nr) + ".json", "w") as playlist:
+            songs: list[Song] = []
+
+            for r in range(tab.model().rowCount()):
+                song: Song = tab.model().itemFromIndex(
+                    tab.model().index(r, 0)).data(QtCore.Qt.UserRole)
+
+                songs.append(song)
+
+            if songs:
+                playlist.write(str(jsonpickle.encode(songs)))
+
     def write_config(self) -> None:
 
         # Write config
@@ -318,25 +335,11 @@ class MyWidget(QtWidgets.QMainWindow):
         with open(user_config_dir(self.appname) + "/config.ini", "w") as config_file:
             self.config.write(config_file)
 
+        # Write playlists (referencing song files)
+        # TODO: do this using md5 of song files?
+
         for t in range(0, self.playlist_tabs.count()):
-            tab = self.playlist_tabs.widget(t)
-
-            if tab.model().rowCount() > 0:
-
-                # Write playlist (referencing song files)
-                # TODO: do this using md5 of song files?
-
-                with open(user_config_dir(self.appname) + "/playlist-" + str(t) + ".json", "w") as playlist:
-                    songs: list[Song] = []
-
-                    for r in range(tab.model().rowCount()):
-                        song: Song = tab.model().itemFromIndex(
-                            tab.model().index(r, 0)).data(QtCore.Qt.UserRole)
-
-                        songs.append(song)
-
-                    if songs:
-                        playlist.write(str(jsonpickle.encode(songs)))
+            self.write_playlist(t)
 
     def setup_actions(self) -> None:
         self.load_action = QAction("Load", self)
@@ -348,6 +351,11 @@ class MyWidget(QtWidgets.QMainWindow):
         self.load_folder_action.setStatusTip("Load folder")
         self.load_folder_action.setShortcut(QKeySequence("Ctrl+Shift+o"))
         self.load_folder_action.triggered.connect(self.load_folder_clicked)
+
+        self.save_action = QAction("Save", self)
+        self.save_action.setStatusTip("Save")
+        self.save_action.setShortcut(QKeySequence("Ctrl+S"))
+        self.save_action.triggered.connect(self.save_clicked)
 
         self.quit_action = QAction("Quit", self)
         self.quit_action.setStatusTip("Quit")
@@ -417,6 +425,8 @@ class MyWidget(QtWidgets.QMainWindow):
         file_menu: QMenu = menu.addMenu("&File")
         file_menu.addAction(self.load_action)
         file_menu.addAction(self.load_folder_action)
+        file_menu.addAction(self.save_action)
+
         file_menu.addSeparator()
         file_menu.addAction(self.quit_action)
 
@@ -487,6 +497,9 @@ class MyWidget(QtWidgets.QMainWindow):
 
     def get_current_tab(self) -> PlaylistTreeView:
         return self.playlist_tabs.widget(self.playlist_tabs.tabBar().currentIndex())
+
+    def get_current_tab_index(self) -> int:
+        return self.playlist_tabs.tabBar().currentIndex()
 
     def open_context_menu(self, position: int) -> None:
         # Song context menu
@@ -913,6 +926,25 @@ class MyWidget(QtWidgets.QMainWindow):
 
                 self.config["files"]["last_open_path"] = os.path.dirname(
                     os.path.abspath(filename))
+
+    @ QtCore.Slot()
+    def save_clicked(self):
+        current_tab = self.get_current_tab_index()
+
+        if current_tab >= 0:
+            tab = self.playlist_tabs.widget(current_tab)
+
+            with open(user_config_dir(self.appname) + "/playlist-" + str(current_tab) + ".json", "w") as playlist:
+                songs: list[Song] = []
+
+                for r in range(tab.model().rowCount()):
+                    song: Song = tab.model().itemFromIndex(
+                        tab.model().index(r, 0)).data(QtCore.Qt.UserRole)
+
+                    songs.append(song)
+
+                if songs:
+                    playlist.write(str(jsonpickle.encode(songs)))
 
     @ QtCore.Slot()
     def play_clicked(self):
