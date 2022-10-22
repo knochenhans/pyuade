@@ -8,8 +8,8 @@ This only runs under Linux for now.
 
 Dependencies:
 - libuade
-- libao (I’m planning to switch to a pure Python audio library sooner or later)
 - libbencode (bencode-tools)
+- PortAudio
 - [Python requirements](requirements.txt)
 
 ![screenshot](https://user-images.githubusercontent.com/5293125/155572697-cf70b894-14d4-4ce8-8e8c-ffd813df8694.png)

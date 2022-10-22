@@ -1,7 +1,11 @@
 appdirs==1.4.4
-debugpy==1.5.1
-jsonpickle==1.5.2
-notify-py==1.0.3.0
+beautifulsoup4==4.11.1
+debugpy==1.6.3
+jsonpickle==2.2.0
+notify-py==0.3.3
+PyAudio==0.2.12
 pydub==0.25.1
-PySide6==6.2.3
-simpleaudio==1.0.4
+pynput==1.7.6
+PySide6==6.4.0
+requests==2.28.1
+xcffib==0.12.1
