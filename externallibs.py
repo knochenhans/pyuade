@@ -8,7 +8,6 @@ libc.free.argtypes = [c_void_p]
 CDLL("/usr/lib/libbencodetools.so", mode=RTLD_GLOBAL)
 # libuade = CDLL("/usr/lib/libuade.so", mode=RTLD_GLOBAL)
 libuade = CDLL("/tmp/uade/src/frontends/libuade/libuade.so", mode=RTLD_GLOBAL)
-libao = CDLL("/usr/lib/libao.so.4")
 
 libuade.uade_new_state.argtypes = [c_void_p]
 libuade.uade_new_state.restype = c_void_p
@@ -56,11 +55,3 @@ libuade.uade_get_fd.argtypes = [c_void_p]
 
 libuade.uade_event_name.argtypes = [c_void_p]
 libuade.uade_event_name.restype = c_char_p
-
-# libao
-
-libao.ao_open_live.argtypes = [c_int, c_void_p, c_void_p]
-libao.ao_open_live.restype = c_void_p
-
-libao.ao_close.argtypes = [c_void_p]
-libao.ao_play.argtypes = [c_void_p, c_char_p, c_uint32]

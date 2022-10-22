@@ -5,6 +5,8 @@ from ctypes import *
 from PySide6.QtWidgets import QProgressDialog
 from ctypes_functions import *
 
+import pyaudio
+
 
 class SubsongData():
     def __init__(self) -> None:
@@ -64,7 +66,10 @@ class Uade(QObject):
 
     def __init__(self):
         super().__init__()
-        libao.ao_initialize()
+        self.pyaudio = pyaudio.PyAudio()
+
+    def __del__(self):
+        self.pyaudio.terminate()
 
     # Load and scan a song file
 
@@ -286,12 +291,7 @@ class Uade(QObject):
                 # Not playable
                 raise Exception
             case 1:
-                format = ao_sample_format(2 * 8, samplerate, 2, 4)
-
-                driver = libao.ao_default_driver_id()
-
-                self.libao_device = libao.ao_open_live(
-                    driver, byref(format), None)
+                self.stream = self.pyaudio.open(format=self.pyaudio.get_format_from_width(2), channels=2, rate=samplerate, output=True)
 
     # Check notifications, return False when song end found
 
@@ -376,7 +376,9 @@ class Uade(QObject):
                 # Only for RMC songs
                 # print(libuade.uade_get_time_position(1, self.state))
 
-            if not libao.ao_play(self.libao_device, self.buf, nbytes):
+            try:
+                self.stream.write(frames=self.buf.raw)
+            except:
                 return False
         else:
             self.song_end.emit()
@@ -420,7 +422,7 @@ class Uade(QObject):
 
         libuade.uade_cleanup_state(self.state)
 
-        if libao.ao_close(self.libao_device) != 1:
-            print("ao_close error")
+        self.stream.stop_stream()
+        self.stream.close()
 
         self.state = 0

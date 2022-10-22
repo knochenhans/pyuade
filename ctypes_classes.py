@@ -176,30 +176,3 @@ class uade_event(Structure):
         ("type", c_int),
         ("uade_event_union", uade_event_union),
     ]
-
-
-# libao
-
-class ao_sample_format(Structure):
-    _fields_ = [
-        ("bits", c_int),
-        ("rate", c_int),
-        ("channels", c_int),
-        ("byte_format", c_int),
-        ("matrix", c_char_p),
-    ]
-
-
-class ao_device(Structure):
-    _fields_ = [
-        ("type", c_int),
-        ("driver_id", c_int),
-        ("funcs", c_void_p),
-        ("file", c_void_p),
-        ("client_byte_format", c_int),
-        ("machine_byte_format", c_int),
-        ("driver_byte_format", c_int),
-        ("swap_buffer", c_char_p),
-        ("swap_buffer_size", c_int),
-        ("internal", c_void_p),
-    ]

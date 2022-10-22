@@ -11,7 +11,6 @@ if platform.system() == "Linux":
     CDLL("libbencodetools.so", mode=RTLD_GLOBAL)
 
     libuade = CDLL("libuade.so", mode=RTLD_GLOBAL)
-    libao = CDLL("libao.so")
 elif platform.system() == "Windows":
     # TODO
     # libc = CDLL(None)
@@ -88,11 +87,3 @@ libuade.uade_event_name.argtypes = [c_void_p]
 libuade.uade_event_name.restype = c_char_p
 
 libuade.uade_song_info.argtypes = [c_char_p, c_uint, c_char_p, c_int]
-
-# libao
-
-libao.ao_open_live.argtypes = [c_int, c_void_p, c_void_p]
-libao.ao_open_live.restype = c_void_p
-
-libao.ao_close.argtypes = [c_void_p]
-libao.ao_play.argtypes = [c_void_p, c_char_p, c_uint32]
