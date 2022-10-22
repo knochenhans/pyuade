@@ -112,32 +112,6 @@ class PlaylistTreeView(QTreeView):
         # Currently playing row for this tab
         self.current_row: int = 0
 
-    def paintEvent(self, event):
-        painter = QPainter(self.viewport())
-        self.drawTree(painter, event.region())
-        self.paintDropIndicator(painter)
-
-    def paintDropIndicator(self, painter):
-
-        if self.state() == QAbstractItemView.DraggingState:
-            opt = QStyleOption()
-            opt.init(self)
-            opt.rect = self.dropIndicatorRect
-            rect = opt.rect
-
-            brush = QBrush(QColor(QtCore.Qt.black))
-
-            if rect.height() == 0:
-                pen = QPen(brush, 2, QtCore.Qt.SolidLine)
-                painter.setPen(pen)
-                painter.drawLine(rect.topLeft(), rect.topRight())
-            else:
-                pen = QPen(brush, 2, QtCore.Qt.SolidLine)
-                painter.setPen(pen)
-                painter.drawRect(rect)
-
-# class MyTreeWidget(QTreeWidget, PlaylistTreeView):
-
 
 class TREEVIEWCOL(IntEnum):
     FILENAME = 0
@@ -197,6 +171,19 @@ class PlaylistTab(QtWidgets.QTabWidget):
         edit = PlaylistTabBarEdit(self, self.tabBar().tabRect(index))
         edit.show()
         edit.setFocus()
+
+
+class PlaylistModel(QStandardItemModel):
+    def __init__(self, parent, length):
+        super().__init__(parent, length)
+
+    def flags(self, index):
+        default_flags = super().flags(index)
+
+        if index.isValid():
+            return QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable | QtCore.Qt.ItemIsDragEnabled
+
+        return default_flags
 
 
 class MyWidget(QtWidgets.QMainWindow):
@@ -435,8 +422,9 @@ class MyWidget(QtWidgets.QMainWindow):
 
     def load_tab(self, name: str) -> None:
         tree = PlaylistTreeView()
-        model = QStandardItemModel(0, len(TREEVIEWCOL))
+        model = PlaylistModel(0, len(TREEVIEWCOL))
         model.setHorizontalHeaderLabels(self.labels)
+        tree.setDragDropMode(QtWidgets.QAbstractItemView.DragDropMode.InternalMove)
 
         tree.setModel(model)
 
@@ -473,17 +461,8 @@ class MyWidget(QtWidgets.QMainWindow):
 
         # Tree
 
-        # self.get_current_tab()s = list[QTreeView]
-        # self.models = list[QStandardItemModel]
-
-        # self.get_current_tab() = QtWidgets.QListWidget()
-
         self.playlist_tabs = PlaylistTab(self)
 
-        # self.load_tab("Tab 1")
-        # self.load_tab("Tab 2")
-
-        # self.setCentralWidget(self.get_current_tab())
         self.setCentralWidget(self.playlist_tabs)
 
         self.setup_actions()
