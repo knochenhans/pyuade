@@ -98,7 +98,9 @@ class MainWindow(QtWidgets.QMainWindow):
         # List of loaded song files for saving the playlist
         # self.song_files: list[SongFile] = []
 
-        self.tray = QSystemTrayIcon(QIcon(path + "/play.png"))
+        self.play_icon = QIcon(path + "/play.png")
+
+        self.tray = QSystemTrayIcon(self.play_icon)
         # self.tray.setContextMenu(menu)
         self.tray.show()
 
@@ -334,6 +336,9 @@ class MainWindow(QtWidgets.QMainWindow):
         tree.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
         tree.customContextMenuRequested.connect(self.open_context_menu)
 
+        # tree.header().setMinimumSectionSize(32)
+        tree.setColumnWidth(0, 50)
+
         self.playlist_tabs.addTab(tree, name)
 
     def setup_gui(self) -> None:
@@ -343,6 +348,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
         for col in TREEVIEWCOL:
             match col:
+                case TREEVIEWCOL.PLAYING:
+                    self.labels.append("")
                 case TREEVIEWCOL.FILENAME:
                     self.labels.append("Filename")
                 case TREEVIEWCOL.SONGNAME:
@@ -369,6 +376,85 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setup_menu()
 
         self.setStatusBar(QStatusBar(self))
+
+    def set_play_status(self, row: int, enable: bool):
+        col = self.get_current_tab().model().itemFromIndex(self.get_current_tab().model().index(row, 0))
+
+        if enable:
+            col.setData(self.play_icon, QtCore.Qt.DecorationRole)
+        else:
+            col.setData(QIcon(), QtCore.Qt.DecorationRole)
+
+    def load_song(self, song: Song) -> None:
+        # Add subsong to playlist
+
+        tree_cols: list[QStandardItem] = []
+
+        for col in TREEVIEWCOL:
+            item = QStandardItem()
+
+            # Store song data in first column
+            if col == 0:
+                item.setData(song, QtCore.Qt.UserRole)
+
+            match col:
+                case TREEVIEWCOL.PLAYING:
+                    item.setText('')
+                    #item.setData(QIcon(path + "/play.png"), QtCore.Qt.DecorationRole)
+                case TREEVIEWCOL.FILENAME:
+                    item.setText(ntpath.basename(song.song_file.filename))
+                case TREEVIEWCOL.SONGNAME:
+                    item.setText(song.song_file.modulename)
+                case TREEVIEWCOL.DURATION:
+                    item.setText(str(datetime.timedelta(seconds=song.subsong.bytes/176400)).split(".")[0])
+                case TREEVIEWCOL.PLAYER:
+                    item.setText(song.song_file.playername)
+                case TREEVIEWCOL.PATH:
+                    item.setText(song.song_file.filename)
+                case TREEVIEWCOL.SUBSONG:
+                    item.setText(str(song.subsong.nr))
+                case TREEVIEWCOL.AUTHOR:
+                    item.setText(song.song_file.author)
+
+            tree_cols.append(item)
+
+        self.get_current_tab().model().appendRow(tree_cols)
+
+    def load_file(self, filename: str) -> None:
+        try:
+            song_file = uade.scan_song_file(filename)
+        except:
+            print(f"Loading {filename} failed, song skipped")
+        else:
+            # self.song_files.append(song_file)
+
+            subsongs = uade.split_subsongs(song_file)
+
+            # Scrape metadata
+
+            # subsongs[0] = self.scrape_modland(subsongs[0], "Author(s)")
+
+            for subsong in subsongs:
+                self.load_song(subsong)
+
+    def scan_and_load_files(self, filenames: list) -> bool:
+        filename: str = ""
+
+        if len(filenames) > 0:
+            progress = QProgressDialog(
+                "Scanning files...", "Cancel", 0, len(filenames), self)
+            progress.setWindowModality(QtCore.Qt.WindowModal)
+
+            for i, filename in enumerate(filenames):
+                progress.setValue(i)
+                if progress.wasCanceled():
+                    break
+
+                self.load_file(filename)
+
+            progress.setValue(len(filenames))
+            return True
+        return False
 
     def closeEvent(self, event: QEvent):
         self.write_config()
@@ -610,6 +696,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     @ QtCore.Slot()
     def item_double_clicked(self, index: QModelIndex):
+        # TODO: why [0].row()?
         self.play(self.get_current_tab().selectedIndexes()[0].row())
 
     def play(self, row: int):
@@ -661,6 +748,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setWindowTitle("pyuade - " + song.song_file.modulename +
                             " - " + song.song_file.filename)
 
+        self.set_play_status(row, True)
     def play_file_thread(self, song: Song) -> None:
         self.playerthread.current_song = song
         self.playerthread.start()
@@ -680,86 +768,31 @@ class MainWindow(QtWidgets.QMainWindow):
         self.play_action.setIcon(QIcon(path + "/play.png"))
         self.load_action.setEnabled(True)
 
-    def play_next_item(self) -> None:
+        index = self.current_selection.currentIndex()
 
+        row = index.row()
+
+        self.set_play_status(row, False)
+
+    def play_next_item(self) -> None:
         index = self.current_selection.currentIndex()
 
         row = index.row()
 
         # current_index actually lists all columns, so for now just take the first col
         if row < self.get_current_tab().model().rowCount(self.get_current_tab().rootIndex()) - 1:
+            self.set_play_status(row, False)
             self.play(row + 1)
 
     def play_previous_item(self) -> None:
+        index = self.current_selection.currentIndex()
+
+        row = index.row()
+
         # current_index actually lists all columns, so for now just take the first col
         if self.get_current_tab().current_row > 0:
-            self.play(self.get_current_tab().current_row - 1)
-
-    def load_song(self, song: Song) -> None:
-        # Add subsong to playlist
-
-        tree_rows: list[QStandardItem] = []
-
-        for col in TREEVIEWCOL:
-            match col:
-                case TREEVIEWCOL.FILENAME:
-                    item = QStandardItem(
-                        ntpath.basename(song.song_file.filename))
-
-                    # Store song in filename column for every row for future use
-                    item.setData(song, QtCore.Qt.UserRole)
-                    tree_rows.append(item)
-                case TREEVIEWCOL.SONGNAME:
-                    tree_rows.append(QStandardItem(song.song_file.modulename))
-                case TREEVIEWCOL.DURATION:
-                    tree_rows.append(QStandardItem(str(datetime.timedelta(
-                        seconds=song.subsong.bytes/176400)).split(".")[0]))
-                case TREEVIEWCOL.PLAYER:
-                    tree_rows.append(QStandardItem(song.song_file.playername))
-                case TREEVIEWCOL.PATH:
-                    tree_rows.append(QStandardItem(song.song_file.filename))
-                case TREEVIEWCOL.SUBSONG:
-                    tree_rows.append(QStandardItem(str(song.subsong.nr)))
-                case TREEVIEWCOL.AUTHOR:
-                    tree_rows.append(QStandardItem(song.song_file.author))
-
-        self.get_current_tab().model().appendRow(tree_rows)
-
-    def load_file(self, filename: str) -> None:
-        try:
-            song_file = uade.scan_song_file(filename)
-        except:
-            print(f"Loading {filename} failed, song skipped")
-        else:
-            # self.song_files.append(song_file)
-
-            subsongs = uade.split_subsongs(song_file)
-
-            # Scrape metadata
-
-            # subsongs[0] = self.scrape_modland(subsongs[0], "Author(s)")
-
-            for subsong in subsongs:
-                self.load_song(subsong)
-
-    def scan_and_load_files(self, filenames: list) -> bool:
-        filename: str = ""
-
-        if len(filenames) > 0:
-            progress = QProgressDialog(
-                "Scanning files...", "Cancel", 0, len(filenames), self)
-            progress.setWindowModality(QtCore.Qt.WindowModal)
-
-            for i, filename in enumerate(filenames):
-                progress.setValue(i)
-                if progress.wasCanceled():
-                    break
-
-                self.load_file(filename)
-
-            progress.setValue(len(filenames))
-            return True
-        return False
+            self.set_play_status(row, False)
+            self.play(row - 1)
 
     @ QtCore.Slot()
     def timeline_update(self, bytes: int) -> None:
@@ -820,7 +853,7 @@ class MainWindow(QtWidgets.QMainWindow):
             if filenames:
                 if self.scan_and_load_files(filenames):
                     self.config["files"]["last_open_path"] = os.path.dirname(
-                        os.path.abspath(filename))
+                        os.path.abspath(filenames[0]))
 
     @ QtCore.Slot()
     def save_clicked(self):
