@@ -1,4 +1,3 @@
-import datetime
 from PySide6.QtCore import QObject, Signal
 from PySide6 import QtCore
 from ctypes import *
@@ -380,6 +379,7 @@ class Uade(QObject):
                 self.stream.write(frames=self.buf.raw)
             except:
                 return False
+
         else:
             self.song_end.emit()
             return False
@@ -426,3 +426,5 @@ class Uade(QObject):
         self.stream.close()
 
         self.state = 0
+
+uade = Uade()
