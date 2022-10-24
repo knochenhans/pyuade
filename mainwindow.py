@@ -105,6 +105,20 @@ class MainWindow(QtWidgets.QMainWindow):
         self.tray.show()
 
         self.setWindowIcon(QIcon(path + "/play.png"))
+        self.setAcceptDrops(True)
+
+    def dragEnterEvent(self, event):
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+
+    def dropEvent(self, event):
+        if event.mimeData().hasUrls():
+            filenames = []
+
+            for url in event.mimeData().urls():
+                filenames.append(url.toLocalFile())
+
+            self.scan_and_load_files(filenames)
 
     def read_config(self) -> None:
 
@@ -749,6 +763,7 @@ class MainWindow(QtWidgets.QMainWindow):
                             " - " + song.song_file.filename)
 
         self.set_play_status(row, True)
+
     def play_file_thread(self, song: Song) -> None:
         self.playerthread.current_song = song
         self.playerthread.start()
