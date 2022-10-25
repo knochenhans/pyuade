@@ -16,19 +16,20 @@ from bs4 import BeautifulSoup
 from notifypy import Notify
 from PySide6 import QtCore, QtWidgets
 from PySide6.QtCore import (QCoreApplication, QDirIterator, QEvent,
-                            QItemSelectionModel, QModelIndex, QSize)
+                            QItemSelectionModel, QModelIndex, QSize, Qt)
 from PySide6.QtGui import QAction, QIcon, QKeySequence, QStandardItem
-from PySide6.QtWidgets import (QAbstractItemView, QDialog, QDialogButtonBox,
-                               QFileDialog, QHeaderView, QLabel, QMenu,
-                               QProgressDialog, QSlider, QStatusBar,
-                               QSystemTrayIcon, QTableWidget, QTableWidgetItem,
-                               QToolBar, QTreeView, QVBoxLayout)
+from PySide6.QtWidgets import (QDialog, QDialogButtonBox, QFileDialog,
+                               QHeaderView, QLabel, QMenu, QProgressDialog,
+                               QSlider, QStatusBar, QSystemTrayIcon,
+                               QTableWidget, QTableWidgetItem, QToolBar,
+                               QVBoxLayout)
 
 from ctypes_functions import *
 from playerthread import PLAYERTHREADSTATUS, PlayerThread
 from playlist import PlaylistModel, PlaylistTab, PlaylistTreeView
 from uade import Song, uade
 from util import TREEVIEWCOL, path
+
 
 class PlaylistItem(QStandardItem):
     def __init__(self):
@@ -132,7 +133,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def read_config(self) -> None:
 
-        # Read playlists
+        # Read playlists / tabs
         # TODO: do this using md5 of song files?
 
         playlists = glob.glob(user_config_dir(
@@ -195,7 +196,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
             for r in range(tab.model().rowCount()):
                 song: Song = tab.model().itemFromIndex(
-                    tab.model().index(r, 0)).data(QtCore.Qt.UserRole)
+                    tab.model().index(r, 0)).data(Qt.UserRole)
 
                 songs.append(song)
 
@@ -235,6 +236,42 @@ class MainWindow(QtWidgets.QMainWindow):
 
         for t in range(0, self.playlist_tabs.count()):
             self.write_playlist(t)
+
+    def setup_gui(self) -> None:
+        # Columns
+
+        self.labels: list[str] = []
+
+        for col in TREEVIEWCOL:
+            match col:
+                case TREEVIEWCOL.PLAYING:
+                    self.labels.append("")
+                case TREEVIEWCOL.FILENAME:
+                    self.labels.append("Filename")
+                case TREEVIEWCOL.SONGNAME:
+                    self.labels.append("Songname")
+                case TREEVIEWCOL.DURATION:
+                    self.labels.append("Duration")
+                case TREEVIEWCOL.PLAYER:
+                    self.labels.append("Player")
+                case TREEVIEWCOL.PATH:
+                    self.labels.append("Path")
+                case TREEVIEWCOL.SUBSONG:
+                    self.labels.append("Subsong")
+                case TREEVIEWCOL.AUTHOR:
+                    self.labels.append("Author")
+
+        # Tree
+
+        self.playlist_tabs = PlaylistTab(self)
+
+        self.setCentralWidget(self.playlist_tabs)
+
+        self.setup_actions()
+        self.setup_toolbar()
+        self.setup_menu()
+
+        self.setStatusBar(QStatusBar(self))
 
     def setup_actions(self) -> None:
         self.load_action = QAction("Load", self)
@@ -317,9 +354,9 @@ class MainWindow(QtWidgets.QMainWindow):
         toolbar.addAction(self.next_action)
         # toolbar.addAction(self.test_action)
 
-        self.timeline = QSlider(QtCore.Qt.Horizontal, self)
+        self.timeline = QSlider(Qt.Horizontal, self)
         self.timeline.setRange(0, 100)
-        self.timeline.setFocusPolicy(QtCore.Qt.NoFocus)
+        self.timeline.setFocusPolicy(Qt.NoFocus)
         self.timeline.setPageStep(5)
         self.timeline.setTracking(False)
         # timeline.setStyleSheet("QSlider::handle:horizontal {background-color: red;}")
@@ -357,49 +394,13 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.playlist_tabs.addTab(tree, name)
 
-    def setup_gui(self) -> None:
-        # Columns
-
-        self.labels: list[str] = []
-
-        for col in TREEVIEWCOL:
-            match col:
-                case TREEVIEWCOL.PLAYING:
-                    self.labels.append("")
-                case TREEVIEWCOL.FILENAME:
-                    self.labels.append("Filename")
-                case TREEVIEWCOL.SONGNAME:
-                    self.labels.append("Songname")
-                case TREEVIEWCOL.DURATION:
-                    self.labels.append("Duration")
-                case TREEVIEWCOL.PLAYER:
-                    self.labels.append("Player")
-                case TREEVIEWCOL.PATH:
-                    self.labels.append("Path")
-                case TREEVIEWCOL.SUBSONG:
-                    self.labels.append("Subsong")
-                case TREEVIEWCOL.AUTHOR:
-                    self.labels.append("Author")
-
-        # Tree
-
-        self.playlist_tabs = PlaylistTab(self)
-
-        self.setCentralWidget(self.playlist_tabs)
-
-        self.setup_actions()
-        self.setup_toolbar()
-        self.setup_menu()
-
-        self.setStatusBar(QStatusBar(self))
-
     def set_play_status(self, row: int, enable: bool):
         col = self.get_current_tab().model().itemFromIndex(self.get_current_tab().model().index(row, 0))
 
         if enable:
-            col.setData(self.play_icon, QtCore.Qt.DecorationRole)
+            col.setData(self.play_icon, Qt.DecorationRole)
         else:
-            col.setData(QIcon(), QtCore.Qt.DecorationRole)
+            col.setData(QIcon(), Qt.DecorationRole)
 
     def load_song(self, song: Song) -> None:
         # Add subsong to playlist
@@ -411,12 +412,12 @@ class MainWindow(QtWidgets.QMainWindow):
 
             # Store song data in first column
             if col == 0:
-                item.setData(song, QtCore.Qt.UserRole)
+                item.setData(song, Qt.UserRole)
 
             match col:
                 case TREEVIEWCOL.PLAYING:
                     item.setText('')
-                    #item.setData(QIcon(path + "/play.png"), QtCore.Qt.DecorationRole)
+                    #item.setData(QIcon(path + "/play.png"), Qt.DecorationRole)
                 case TREEVIEWCOL.FILENAME:
                     item.setText(ntpath.basename(song.song_file.filename))
                 case TREEVIEWCOL.SONGNAME:
@@ -459,7 +460,7 @@ class MainWindow(QtWidgets.QMainWindow):
         if len(filenames) > 0:
             progress = QProgressDialog(
                 "Scanning files...", "Cancel", 0, len(filenames), self)
-            progress.setWindowModality(QtCore.Qt.WindowModal)
+            progress.setWindowModality(Qt.WindowModal)
 
             for i, filename in enumerate(filenames):
                 progress.setValue(i)
@@ -508,7 +509,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def keyPressEvent(self, event: QEvent):
         if self.get_current_tab().selectionModel().selectedRows(0):
-            if event.key() == QtCore.Qt.Key_Delete:
+            if event.key() == Qt.Key_Delete:
                 self.delete_selected_items()
 
     # @ QtCore.Slot()
@@ -526,7 +527,7 @@ class MainWindow(QtWidgets.QMainWindow):
         row = index.row()
 
         song: Song = self.get_current_tab().model().itemFromIndex(
-            self.get_current_tab().model().index(row, 0)).data(QtCore.Qt.UserRole)
+            self.get_current_tab().model().index(row, 0)).data(Qt.UserRole)
 
         dialog = SongInfoDialog(song)
         dialog.setWindowTitle(f"Song info for {song.song_file.filename}")
@@ -542,7 +543,7 @@ class MainWindow(QtWidgets.QMainWindow):
             row = index.row()
 
             song: Song = self.get_current_tab().model().itemFromIndex(
-                self.get_current_tab().model().index(row, 0)).data(QtCore.Qt.UserRole)
+                self.get_current_tab().model().index(row, 0)).data(Qt.UserRole)
 
             license = Path(user_config_dir(
                 self.appname) + "/modarchive-api.key")
@@ -656,7 +657,7 @@ class MainWindow(QtWidgets.QMainWindow):
             row = index.row()
 
             song: Song = self.get_current_tab().model().itemFromIndex(
-                self.get_current_tab().model().index(row, 0)).data(QtCore.Qt.UserRole)
+                self.get_current_tab().model().index(row, 0)).data(Qt.UserRole)
 
             song.song_file.author = self.scrape_modland(song, "Author(s)")
 
@@ -669,7 +670,7 @@ class MainWindow(QtWidgets.QMainWindow):
         row = self.get_current_tab().selectedIndexes()[0].row()
 
         song: Song = self.get_current_tab().model().itemFromIndex(
-            self.get_current_tab().model().index(row, 0)).data(QtCore.Qt.UserRole)
+            self.get_current_tab().model().index(row, 0)).data(Qt.UserRole)
 
         sha1 = hashlib.sha1()
 
@@ -722,7 +723,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # Get song from user data in column
 
         song: Song = self.get_current_tab().model().itemFromIndex(
-            self.get_current_tab().model().index(row, 0)).data(QtCore.Qt.UserRole)
+            self.get_current_tab().model().index(row, 0)).data(Qt.UserRole)
 
         self.play_file_thread(song)
         self.get_current_tab().current_row = row
@@ -884,7 +885,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
                 for r in range(tab.model().rowCount()):
                     song: Song = tab.model().itemFromIndex(
-                        tab.model().index(r, 0)).data(QtCore.Qt.UserRole)
+                        tab.model().index(r, 0)).data(Qt.UserRole)
 
                     songs.append(song)
 

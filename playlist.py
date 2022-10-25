@@ -1,5 +1,5 @@
 from PySide6 import QtCore, QtWidgets
-from PySide6.QtCore import QRect
+from PySide6.QtCore import QRect, Qt
 from PySide6.QtGui import QKeyEvent, QStandardItemModel
 from PySide6.QtWidgets import QTreeView
 
@@ -20,7 +20,7 @@ class PlaylistTreeView(QTreeView):
         self.setSelectionBehavior(self.SelectRows)
         self.setEditTriggers(self.NoEditTriggers)
 
-        self.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+        self.setContextMenuPolicy(Qt.CustomContextMenu)
 
         # self.header().setMinimumSectionSize(32)
         self.setColumnWidth(0, 50)
@@ -36,7 +36,7 @@ class PlaylistTabBarEdit(QtWidgets.QLineEdit):
         self.returnPressed.connect(self.close)
 
     def keyPressEvent(self, event: QKeyEvent):
-        if event.key() == QtCore.Qt.Key_Escape:
+        if event.key() == Qt.Key_Escape:
             self.close()
 
         super().keyPressEvent(event)
@@ -84,11 +84,11 @@ class PlaylistModel(QStandardItemModel):
         default_flags = super().flags(index)
 
         if index.isValid():
-            return QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable | QtCore.Qt.ItemIsDragEnabled
+            return Qt.ItemIsEnabled | Qt.ItemIsSelectable | Qt.ItemIsDragEnabled
 
         return default_flags
     
     def dropMimeData(self, data, action, row, col, parent):
         # Prevent shifting colums
-        response = super().dropMimeData(data, QtCore.Qt.CopyAction, row, 0, parent)
+        response = super().dropMimeData(data, Qt.CopyAction, row, 0, parent)
         return response
