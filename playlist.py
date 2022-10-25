@@ -15,6 +15,16 @@ class PlaylistTreeView(QTreeView):
         # Currently playing row for this tab
         self.current_row: int = 0
 
+        self.setDragDropMode(self.InternalMove)
+        self.setSelectionMode(self.ExtendedSelection)
+        self.setSelectionBehavior(self.SelectRows)
+        self.setEditTriggers(self.NoEditTriggers)
+
+        self.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+
+        # self.header().setMinimumSectionSize(32)
+        self.setColumnWidth(0, 50)
+
 
 class PlaylistTabBarEdit(QtWidgets.QLineEdit):
     def __init__(self, parent, rect: QRect) -> None:
@@ -77,3 +87,8 @@ class PlaylistModel(QStandardItemModel):
             return QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable | QtCore.Qt.ItemIsDragEnabled
 
         return default_flags
+    
+    def dropMimeData(self, data, action, row, col, parent):
+        # Prevent shifting colums
+        response = super().dropMimeData(data, QtCore.Qt.CopyAction, row, 0, parent)
+        return response

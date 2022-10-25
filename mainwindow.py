@@ -30,6 +30,16 @@ from playlist import PlaylistModel, PlaylistTab, PlaylistTreeView
 from uade import Song, uade
 from util import TREEVIEWCOL, path
 
+class PlaylistItem(QStandardItem):
+    def __init__(self):
+        super().__init__()
+
+    def dropEvent(self):
+        print('test')
+
+    def dragEnterEvent(self):
+        pass
+
 
 class SongInfoDialog(QDialog):
     def __init__(self, song: Song):
@@ -336,22 +346,14 @@ class MainWindow(QtWidgets.QMainWindow):
         edit_menu.addAction(self.delete_action)
 
     def load_tab(self, name: str) -> None:
-        tree = PlaylistTreeView()
+        tree = PlaylistTreeView(self)
         model = PlaylistModel(0, len(TREEVIEWCOL))
         model.setHorizontalHeaderLabels(self.labels)
-        tree.setDragDropMode(QtWidgets.QAbstractItemView.DragDropMode.InternalMove)
 
         tree.setModel(model)
 
-        tree.setSelectionMode(QTreeView.ExtendedSelection)
-        tree.setEditTriggers(QAbstractItemView.NoEditTriggers)
-
         tree.doubleClicked.connect(self.item_double_clicked)
-        tree.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
         tree.customContextMenuRequested.connect(self.open_context_menu)
-
-        # tree.header().setMinimumSectionSize(32)
-        tree.setColumnWidth(0, 50)
 
         self.playlist_tabs.addTab(tree, name)
 
@@ -405,7 +407,7 @@ class MainWindow(QtWidgets.QMainWindow):
         tree_cols: list[QStandardItem] = []
 
         for col in TREEVIEWCOL:
-            item = QStandardItem()
+            item = PlaylistItem()
 
             # Store song data in first column
             if col == 0:
