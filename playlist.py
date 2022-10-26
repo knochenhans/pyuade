@@ -25,6 +25,10 @@ class PlaylistTreeView(QTreeView):
         # self.header().setMinimumSectionSize(32)
         self.setColumnWidth(0, 50)
 
+        # Hide left-hand space from hidden expand sign
+        self.setRootIsDecorated(False)
+        self.header().setMinimumSectionSize(20)
+
 
 class PlaylistTabBarEdit(QtWidgets.QLineEdit):
     def __init__(self, parent, rect: QRect) -> None:
