@@ -456,6 +456,22 @@ class MainWindow(QtWidgets.QMainWindow):
             for subsong in subsongs:
                 self.load_song(subsong)
 
+    def scan_and_load_folder(self, dir) -> bool:
+        it = QDirIterator(
+            dir, QDirIterator.Subdirectories | QDirIterator.FollowSymlinks)
+
+        filenames = []
+
+        while it.hasNext():
+            filename = it.next()
+            if ntpath.basename(filename) not in ['.', '..']:
+                filenames.append(filename)
+
+        if filenames:
+            filenames.sort()
+            return self.scan_and_load_files(filenames)
+        return False
+
     def scan_and_load_files(self, filenames: list) -> bool:
         filename: str = ""
 
@@ -465,11 +481,14 @@ class MainWindow(QtWidgets.QMainWindow):
             progress.setWindowModality(Qt.WindowModal)
 
             for i, filename in enumerate(filenames):
-                progress.setValue(i)
-                if progress.wasCanceled():
-                    break
+                if os.path.isdir(filename):
+                    self.scan_and_load_folder(filename)
+                else:
+                    progress.setValue(i)
+                    if progress.wasCanceled():
+                        break
 
-                self.load_file(filename)
+                    self.load_file(filename)
 
             progress.setValue(len(filenames))
             return True
@@ -845,18 +864,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 dir = QFileDialog.getExistingDirectory(
                     self, ("Open music folder"), last_open_path, QFileDialog.ShowDirsOnly)
 
-                # os.getcwd()
-
-                it = QDirIterator(
-                    dir, QDirIterator.Subdirectories | QDirIterator.FollowSymlinks)
-
-                filenames = []
-
-                while it.hasNext():
-                    filenames.append(it.next())
-
-                if self.scan_and_load_files(filenames):
-                    self.config["files"]["last_open_path"] = dir
+                if self.scan_and_load_folder(dir):
+                    self.config["files"]["last_open_path"] = os.path.dirname(os.path.abspath(dir))
 
     @ QtCore.Slot()
     def load_clicked(self):
