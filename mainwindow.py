@@ -70,6 +70,8 @@ class SongInfoDialog(QDialog):
         tableWidget.setRowCount(len(attributes))
         tableWidget.setColumnCount(2)
         tableWidget.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        tableWidget.horizontalHeader().hide()
+        tableWidget.verticalHeader().hide()
         self.vboxlayout.addWidget(tableWidget)
 
         self.setLayout(self.vboxlayout)
