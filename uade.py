@@ -285,10 +285,10 @@ class Uade(QObject):
             case -1:
                 # Fatal error
                 libuade.uade_cleanup_state(self.state)
-                raise Exception
+                raise RuntimeError
             case 0:
                 # Not playable
-                raise Exception
+                raise ValueError
             case 1:
                 self.stream = self.pyaudio.open(format=self.pyaudio.get_format_from_width(2), channels=2, rate=samplerate, output=True)
 
@@ -364,7 +364,7 @@ class Uade(QObject):
             # a = np.frombuffer(pa.contents, dtype=np.int16)
 
             if nbytes < 0:
-                raise Exception("Playback error")
+                raise RuntimeError("Playback error")
             elif nbytes == 0:
                 self.song_end.emit()
                 #raise EOFError("Song end")

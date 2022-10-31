@@ -30,8 +30,8 @@ class PlayerThread(QtCore.QThread):
 
         try:
             uade.prepare_play(self.current_song)
-        except:
-            print('prepare_play() failed.')
+        except Exception as e:
+            print(f'prepare_play() failed: {e}')
 
         while self.status == PLAYERTHREADSTATUS.PLAYING:
             try:
