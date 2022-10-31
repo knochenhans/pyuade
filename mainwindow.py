@@ -17,30 +17,17 @@ from notifypy import Notify
 from PySide6 import QtCore, QtWidgets
 from PySide6.QtCore import (QCoreApplication, QDirIterator, QEvent,
                             QItemSelectionModel, QModelIndex, QSize, Qt)
-from PySide6.QtGui import QAction, QIcon, QKeySequence, QStandardItem
-from PySide6.QtWidgets import (QDialog, QDialogButtonBox, QFileDialog,
-                               QHeaderView, QLabel, QMenu, QProgressDialog,
-                               QSlider, QStatusBar, QSystemTrayIcon,
-                               QTableWidget, QTableWidgetItem, QToolBar,
-                               QVBoxLayout)
+from PySide6.QtGui import QAction, QIcon, QKeySequence
+from PySide6.QtWidgets import (QFileDialog, QLabel, QMenu, QProgressDialog,
+                               QSlider, QStatusBar, QSystemTrayIcon, QToolBar)
 
 from ctypes_functions import *
 from playerthread import PLAYERTHREADSTATUS, PlayerThread
-from playlist import PlaylistModel, PlaylistTab, PlaylistTreeView
+from playlist import (PlaylistExport, PlaylistItem, PlaylistModel, PlaylistTab,
+                      PlaylistTreeView)
 from songinfodialog import SongInfoDialog
 from uade import Song, uade
 from util import TREEVIEWCOL, path
-
-
-class PlaylistItem(QStandardItem):
-    def __init__(self):
-        super().__init__()
-
-    def dropEvent(self):
-        print('test')
-
-    def dragEnterEvent(self):
-        pass
 
 
 class MainWindow(QtWidgets.QMainWindow):
@@ -81,6 +68,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setWindowIcon(QIcon(path + "/play.png"))
         self.setAcceptDrops(True)
 
+        self.playlist_tabs.addtabButton.clicked.connect(self.new_tab)
     def dragEnterEvent(self, event):
         if event.mimeData().hasUrls():
             event.acceptProposedAction()
@@ -94,39 +82,40 @@ class MainWindow(QtWidgets.QMainWindow):
 
             self.scan_and_load_files(filenames)
 
+    def load_playlist_as_tab(self, filename: str):
+        if os.stat(filename).st_size != 0:
+            with open(filename, 'r') as playlist_file:
+                playlist_export = jsonpickle.decode(playlist_file.read())
+
+                if isinstance(playlist_export, PlaylistExport):
+                    if playlist_export.songs:
+                        tree = self.add_tab(playlist_export.name)
+
+                        for song in playlist_export.songs:
+                            self.load_song(song, tree)
+
     def read_config(self) -> None:
-
-        # Read playlists / tabs
-        # TODO: do this using md5 of song files?
-
-        playlists = glob.glob(user_config_dir(
-            self.appname) + "/playlist-*.json")
-        playlists.sort()
-
-        if len(playlists) > 0:
-            for i, pfile in enumerate(playlists):
-                self.load_tab(str(i))
-                self.playlist_tabs.setCurrentIndex(i)
-
-                if os.stat(pfile).st_size != 0:
-                    with open(pfile, 'r') as playlist:
-                        playlist: list[Song] = jsonpickle.decode(playlist.read())
-
-                        if playlist:
-                            for p in playlist:
-                                self.load_song(p)
-        else:
-            self.load_tab("Default")
 
         # Read config
 
         self.config["window"] = {}
         self.config["files"] = {}
-        self.config["playlists"] = {}
 
         if self.config.read(user_config_dir(self.appname) + '/config.ini'):
             self.resize(int(self.config["window"]["width"]),
                         int(self.config["window"]["height"]))
+
+            # Load playlist from files add as tabs
+            # TODO: do this using md5 of song files?
+
+            playlist_filenames = glob.glob(user_config_dir(self.appname) + "/playlist-*.json")
+            playlist_filenames.sort()
+
+            if len(playlist_filenames) > 0:
+                for playlist_filename in playlist_filenames:
+                    self.load_playlist_as_tab(playlist_filename)
+            else:
+                self.add_tab("Default")
 
             if self.config.has_option("files", "current_item"):
                 current_item_row = int(self.config["files"]["current_item"])
@@ -137,34 +126,12 @@ class MainWindow(QtWidgets.QMainWindow):
                     self.get_current_tab().selectionModel().select(self.get_current_tab().model().index(self.get_current_tab().current_row, 0),
                                                                    QItemSelectionModel.SelectCurrent | QItemSelectionModel.Rows)
 
-            # Column width
+            # Load column width values
 
             for c in range(self.get_current_tab().model().columnCount()):
                 if self.config.has_option("window", "col" + str(c) + "_width"):
                     self.get_current_tab().header().resizeSection(
                         c, int(self.config["window"]["col" + str(c) + "_width"]))
-
-            # Playlist tab names
-
-            for t in range(self.playlist_tabs.count()):
-                if self.config.has_option("playlists", "playlist" + str(t)):
-                    self.playlist_tabs.setTabText(
-                        t, self.config["playlists"]["playlist" + str(t)])
-
-    def write_playlist(self, tab_nr: int) -> None:
-        tab = self.playlist_tabs.widget(tab_nr)
-
-        with open(user_config_dir(self.appname) + "/playlist-" + str(tab_nr) + ".json", "w") as playlist:
-            songs: list[Song] = []
-
-            for r in range(tab.model().rowCount()):
-                song: Song = tab.model().itemFromIndex(
-                    tab.model().index(r, 0)).data(Qt.UserRole)
-
-                songs.append(song)
-
-            if songs:
-                playlist.write(str(jsonpickle.encode(songs)))
 
     def write_config(self) -> None:
 
@@ -181,10 +148,6 @@ class MainWindow(QtWidgets.QMainWindow):
             self.config["files"]["current_item"] = str(
                 self.get_current_tab().current_row)
 
-        for t in range(0, self.playlist_tabs.count()):
-            self.config["playlists"]["playlist" +
-                                     str(t)] = self.playlist_tabs.tabText(t)
-
         # Column width
 
         for c in range(self.get_current_tab().model().columnCount()):
@@ -197,8 +160,32 @@ class MainWindow(QtWidgets.QMainWindow):
         # Write playlists (referencing song files)
         # TODO: do this using md5 of song files?
 
+        # Delete existing playlist files
+        existing_playlists = glob.glob(user_config_dir(self.appname) + "/playlist-*.json")
+
+        for playlist in existing_playlists:
+            os.remove(playlist)
+
+        # Write all tabs as playlists
         for t in range(0, self.playlist_tabs.count()):
-            self.write_playlist(t)
+            self.write_playlist_file(t)
+
+    def playlist_from_tab(self, tab_nr: int) -> PlaylistExport:
+        songs: list[Song] = []
+
+        tab = self.playlist_tabs.widget(tab_nr)
+
+        for row in range(tab.model().rowCount()):
+            song: Song = tab.model().itemFromIndex(
+                tab.model().index(row, 0)).data(Qt.UserRole)
+
+            songs.append(song)
+        tab_name = self.playlist_tabs.tabBar().tabText(tab_nr)
+        return PlaylistExport(tab_name, songs)
+
+    def write_playlist_file(self, tab_nr: int) -> None:
+        with open(user_config_dir(self.appname) + "/playlist-" + str(tab_nr) + ".json", "w") as playlist:
+            playlist.write(str(jsonpickle.encode(self.playlist_from_tab(tab_nr))))
 
     def setup_gui(self) -> None:
         # Columns
@@ -306,6 +293,16 @@ class MainWindow(QtWidgets.QMainWindow):
         # self.test_action.setStatusTip("Test")
         # self.test_action.triggered.connect(self.test_clicked)
 
+        self.new_tab_action = QAction("New Tab", self)
+        self.new_tab_action.setStatusTip("Open a new tab")
+        self.new_tab_action.setShortcut(QKeySequence("Ctrl+t"))
+        self.new_tab_action.triggered.connect(self.new_tab)
+
+        self.close_tab_action = QAction("Close Tab", self)
+        self.close_tab_action.setStatusTip("Close current  tab")
+        self.close_tab_action.setShortcut(QKeySequence("Ctrl+w"))
+        self.close_tab_action.triggered.connect(self.close_current_tab)
+
     def setup_toolbar(self) -> None:
         toolbar: QToolBar = QToolBar("Toolbar")
         toolbar.setIconSize(QSize(16, 16))
@@ -344,8 +341,10 @@ class MainWindow(QtWidgets.QMainWindow):
 
         edit_menu = menu.addMenu("&Edit")
         edit_menu.addAction(self.delete_action)
+        edit_menu.addAction(self.new_tab_action)
+        edit_menu.addAction(self.close_tab_action)
 
-    def load_tab(self, name: str) -> None:
+    def add_tab(self, name: str = '') -> PlaylistTreeView:
         tree = PlaylistTreeView(self)
         model = PlaylistModel(0, len(TREEVIEWCOL))
         model.setHorizontalHeaderLabels(self.labels)
@@ -356,6 +355,13 @@ class MainWindow(QtWidgets.QMainWindow):
         tree.customContextMenuRequested.connect(self.open_context_menu)
 
         self.playlist_tabs.addTab(tree, name)
+        return tree
+
+    def new_tab(self) -> None:
+        self.playlist_tabs.setCurrentWidget(self.add_tab('New Tab'))
+
+    def close_current_tab(self) -> None:
+        self.playlist_tabs.remove_current_tab()
 
     def set_play_status(self, row: int, enable: bool):
         col = self.get_current_tab().model().itemFromIndex(self.get_current_tab().model().index(row, 0))
@@ -365,10 +371,10 @@ class MainWindow(QtWidgets.QMainWindow):
         else:
             col.setData(QIcon(), Qt.DecorationRole)
 
-    def load_song(self, song: Song) -> None:
+    def load_song(self, song: Song, tab=None) -> None:
         # Add subsong to playlist
 
-        tree_cols: list[QStandardItem] = []
+        tree_cols: list[PlaylistItem] = []
 
         for col in TREEVIEWCOL:
             item = PlaylistItem()
@@ -398,7 +404,10 @@ class MainWindow(QtWidgets.QMainWindow):
 
             tree_cols.append(item)
 
-        self.get_current_tab().model().appendRow(tree_cols)
+        if not tab:
+            tab = self.get_current_tab()
+
+        tab.model().appendRow(tree_cols)
 
     def load_file(self, filename: str) -> None:
         try:
@@ -850,19 +859,20 @@ class MainWindow(QtWidgets.QMainWindow):
         current_tab = self.get_current_tab_index()
 
         if current_tab >= 0:
-            tab = self.playlist_tabs.widget(current_tab)
+            self.write_playlist_file(current_tab)
+            # tab = self.playlist_tabs.widget(current_tab)
 
-            with open(user_config_dir(self.appname) + "/playlist-" + str(current_tab) + ".json", "w") as playlist:
-                songs: list[Song] = []
+            # with open(user_config_dir(self.appname) + "/playlist-" + str(current_tab) + ".json", "w") as playlist:
+            #     songs: list[Song] = []
 
-                for r in range(tab.model().rowCount()):
-                    song: Song = tab.model().itemFromIndex(
-                        tab.model().index(r, 0)).data(Qt.UserRole)
+            #     for r in range(tab.model().rowCount()):
+            #         song: Song = tab.model().itemFromIndex(
+            #             tab.model().index(r, 0)).data(Qt.UserRole)
 
-                    songs.append(song)
+            #         songs.append(song)
 
-                if songs:
-                    playlist.write(str(jsonpickle.encode(songs)))
+            #     if songs:
+            #         playlist.write(str(jsonpickle.encode(songs)))
 
     @ QtCore.Slot()
     def play_clicked(self):

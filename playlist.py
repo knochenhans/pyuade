@@ -1,10 +1,30 @@
-from PySide6 import QtCore, QtWidgets
+from PySide6 import QtCore, QtGui, QtWidgets
 from PySide6.QtCore import QRect, Qt
-from PySide6.QtGui import QKeyEvent, QStandardItemModel
-from PySide6.QtWidgets import QTreeView
+from PySide6.QtGui import QKeyEvent, QStandardItem, QStandardItemModel
+from PySide6.QtWidgets import QToolButton, QTreeView
 
 from ctypes_functions import *
 from uade import *
+
+
+class PlaylistExport():
+    def __init__(self, name: str = '', songs = None) -> None:
+        self.name = name
+        self.songs = songs
+
+
+class PlaylistItem(QStandardItem):
+    def __init__(self):
+        super().__init__()
+
+    def flags(self, index):
+        return QtGui.Qt.NoItemFlags
+
+    # def dropEvent(self):
+    #     print('test')
+
+    # def dragEnterEvent(self):
+    #     pass
 
 
 class PlaylistTreeView(QTreeView):
@@ -22,8 +42,7 @@ class PlaylistTreeView(QTreeView):
 
         self.setContextMenuPolicy(Qt.CustomContextMenu)
 
-        # self.header().setMinimumSectionSize(32)
-        self.setColumnWidth(0, 50)
+        self.setColumnWidth(0, 20)
 
         # Hide left-hand space from hidden expand sign
         self.setRootIsDecorated(False)
@@ -38,6 +57,7 @@ class PlaylistTabBarEdit(QtWidgets.QLineEdit):
         self.textChanged.connect(parent.tabBar().rename)
         self.editingFinished.connect(parent.tabBar().editing_finished)
         self.returnPressed.connect(self.close)
+        #TODO: self.inputRejected.connect(self.close)
 
     def keyPressEvent(self, event: QKeyEvent):
         if event.key() == Qt.Key_Escape:
@@ -54,6 +74,8 @@ class PlaylistTabBar(QtWidgets.QTabBar):
         self.edit_index = 0
         self.setMovable(True)
 
+        # self.tabBarDoubleClicked.connect(self.doubleClicked)
+
     @ QtCore.Slot()
     def rename(self, text) -> None:
         self.edit_text = text
@@ -62,15 +84,24 @@ class PlaylistTabBar(QtWidgets.QTabBar):
     def editing_finished(self) -> None:
         self.setTabText(self.edit_index, self.edit_text)
 
+    # @ QtCore.Slot()
+    # def doubleClicked(self, index) -> None:
+    #     print("test")
+
 
 class PlaylistTab(QtWidgets.QTabWidget):
     def __init__(self, parent) -> None:
         super().__init__(parent)
 
-        tab = PlaylistTabBar(parent)
-        self.setTabBar(tab)
+        tab_bar = PlaylistTabBar(parent)
+        self.setTabBar(tab_bar)
 
         self.tabBarDoubleClicked.connect(self.doubleClicked)
+        # self.tabBarDoubleClicked.connect(self.tabBarDoubleClicked)
+
+        self.addtabButton = QToolButton()
+        self.addtabButton.setText(' + ')
+        self.setCornerWidget(self.addtabButton, Qt.TopRightCorner)
 
     @ QtCore.Slot()
     def doubleClicked(self, index) -> None:
@@ -78,6 +109,12 @@ class PlaylistTab(QtWidgets.QTabWidget):
         edit = PlaylistTabBarEdit(self, self.tabBar().tabRect(index))
         edit.show()
         edit.setFocus()
+
+    # def tabBarDoubleClicked(self, index):
+    #     print('blabla')
+
+    def remove_current_tab(self):
+        self.removeTab(self.currentIndex())
 
 
 class PlaylistModel(QStandardItemModel):
@@ -91,7 +128,7 @@ class PlaylistModel(QStandardItemModel):
             return Qt.ItemIsEnabled | Qt.ItemIsSelectable | Qt.ItemIsDragEnabled
 
         return default_flags
-    
+
     def dropMimeData(self, data, action, row, col, parent):
         # Prevent shifting colums
         response = super().dropMimeData(data, Qt.CopyAction, row, 0, parent)
