@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (QDialog, QDialogButtonBox, QFileDialog,
 from ctypes_functions import *
 from playerthread import PLAYERTHREADSTATUS, PlayerThread
 from playlist import PlaylistModel, PlaylistTab, PlaylistTreeView
+from songinfodialog import SongInfoDialog
 from uade import Song, uade
 from util import TREEVIEWCOL, path
 
@@ -40,46 +41,6 @@ class PlaylistItem(QStandardItem):
 
     def dragEnterEvent(self):
         pass
-
-
-class SongInfoDialog(QDialog):
-    def __init__(self, song: Song):
-        super().__init__()
-
-        attributes = {}
-
-        attributes["Author"] = song.song_file.author
-        attributes["Filename"] = song.song_file.filename
-        attributes["Format"] = song.song_file.formatname
-        attributes["Extension"] = song.song_file.ext
-        attributes["Size (Bytes)"] = str(song.song_file.modulebytes)
-        attributes["md5"] = song.song_file.modulemd5
-        attributes["Player"] = song.song_file.playername
-        attributes["Player filename"] = song.song_file.playerfname
-
-        self.setWindowTitle("Song info")
-
-        QBtn = QDialogButtonBox.Close
-
-        self.buttonBox = QDialogButtonBox(QBtn)
-        self.buttonBox.rejected.connect(self.close)
-
-        self.vboxlayout = QVBoxLayout()
-
-        tableWidget = QTableWidget(self)
-        tableWidget.setRowCount(len(attributes))
-        tableWidget.setColumnCount(2)
-        tableWidget.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        tableWidget.horizontalHeader().hide()
-        tableWidget.verticalHeader().hide()
-        self.vboxlayout.addWidget(tableWidget)
-
-        self.setLayout(self.vboxlayout)
-
-        for idx, attribute in enumerate(attributes):
-            tableWidget.setItem(idx, 0, QTableWidgetItem(attribute))
-            tableWidget.setItem(
-                idx, 1, QTableWidgetItem(attributes[attribute]))
 
 
 class MainWindow(QtWidgets.QMainWindow):
