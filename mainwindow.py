@@ -427,15 +427,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.load_song(subsong)
 
     def scan_and_load_folder(self, dir) -> bool:
-        it = QDirIterator(
-            dir, QDirIterator.Subdirectories | QDirIterator.FollowSymlinks)
-
-        filenames = []
-
-        while it.hasNext():
-            filename = it.next()
-            if ntpath.basename(filename) not in ['.', '..']:
-                filenames.append(filename)
+        filenames = glob.glob(dir + '/**/*', recursive=True)
+        filenames = [f for f in filenames if os.path.isfile(f)] 
 
         if filenames:
             filenames.sort()
