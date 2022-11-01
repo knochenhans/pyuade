@@ -190,6 +190,7 @@ class Uade(QObject):
                 raise Exception
             case 0:
                 # Not playable
+                libuade.uade_cleanup_state(self.state)
                 raise Exception
             case 1:
                 songinfo: uade_song_info = libuade.uade_get_song_info(
@@ -233,6 +234,7 @@ class Uade(QObject):
                 song_file.subsong_data.min = songinfo.subsongs.min
                 song_file.subsong_data.max = songinfo.subsongs.max
                 song_file.subsong_data.def_ = songinfo.subsongs.def_
+                libuade.uade_cleanup_state(self.state)
 
         return song_file
 
