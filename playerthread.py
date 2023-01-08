@@ -25,6 +25,7 @@ class PlayerThread(QtCore.QThread):
         return gettrace() is not None
 
     def run(self):
+        self.setPriority(QtCore.QThread.Priority.TimeCriticalPriority)
         if self.debugger_is_active():
             debugpy.debug_this_thread()
 

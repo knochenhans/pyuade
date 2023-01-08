@@ -58,7 +58,7 @@ class Uade(QObject):
     current_bytes_update = Signal(int)
     song_len = 0
 
-    buf_len = 4096
+    buf_len = 8192
     buf = (c_char * buf_len)()
 
     seek_position = 0
