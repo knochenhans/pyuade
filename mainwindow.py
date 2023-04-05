@@ -325,8 +325,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.lookup_modland_action = QAction("Lookup in Modland", self)
         self.lookup_modland_action.setStatusTip("Lookup in Modland")
-        self.lookup_modland_action.triggered.connect(
-            self.lookup_modland_clicked)
+        self.lookup_modland_action.triggered.connect(self.lookup_modland_clicked)
 
         self.sort_action = QAction("Sort", self)
         self.sort_action.setStatusTip("Sort")
