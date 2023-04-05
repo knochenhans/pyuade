@@ -5,19 +5,19 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "pyuade",
+            "type": "python",
+            "request": "launch",
+            "program": "pyuade.py",
+            "console": "integratedTerminal"
+        },
+        {
             "name": "Python: Aktuelle Datei",
             "type": "python",
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal",
             "justMyCode": true
-        },
-        {
-            "name": "pyuade",
-            "type": "python",
-            "request": "launch",
-            "program": "pyuade.py",
-            "console": "integratedTerminal"
         }
     ]
 }

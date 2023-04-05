@@ -369,7 +369,7 @@ class Uade(QObject):
                 raise RuntimeError("Playback error")
             elif nbytes == 0:
                 self.song_end.emit()
-                #raise EOFError("Song end")
+                # raise EOFError("Song end")
                 return False
             # else:
                 # total = np.append(total, a)

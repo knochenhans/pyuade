@@ -1,5 +1,5 @@
-from enum import IntEnum
 import os
+from enum import IntEnum
 
 
 class TREEVIEWCOL(IntEnum):

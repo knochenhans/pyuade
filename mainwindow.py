@@ -339,6 +339,9 @@ class MainWindow(QtWidgets.QMainWindow):
         file_menu.addSeparator()
         file_menu.addAction(self.quit_action)
 
+        file_menu.addSeparator()
+        file_menu.addAction(self.open_options_action)
+
         edit_menu = menu.addMenu("&Edit")
         edit_menu.addAction(self.delete_action)
         edit_menu.addAction(self.new_tab_action)
@@ -428,10 +431,10 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def scan_and_load_folder(self, dir) -> bool:
         filenames = glob.glob(dir + '/**/*', recursive=True)
-        filenames = [f for f in filenames if os.path.isfile(f)] 
+        filenames = [f for f in filenames if os.path.isfile(f)]
 
         if filenames:
-            filenames.sort()
+            # filenames.sort()
             return self.scan_and_load_files(filenames)
         return False
 

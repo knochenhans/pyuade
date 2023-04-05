@@ -38,9 +38,11 @@ class PlayerThread(QtCore.QThread):
             try:
                 if not uade.play_threaded():
                     self.status = PLAYERTHREADSTATUS.STOPPED
-            except EOFError:
+            except EOFError as e:
                 self.status = PLAYERTHREADSTATUS.STOPPED
-            except Exception:
+                print(e)
+            except Exception as e:
                 self.status = PLAYERTHREADSTATUS.STOPPED
+                print(f'play_threaded() failed: {e}')
 
         uade.stop()

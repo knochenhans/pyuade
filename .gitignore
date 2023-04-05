@@ -1,5 +1,7 @@
-__pycache__
+.__pycache__
 __pycache__/*
 pyuade.code-workspace
 *.key
-
+.vscode
+.vscode/*
+.gitignore
