@@ -31,6 +31,53 @@ from uade import Song, uade
 from util import TREEVIEWCOL, path
 
 
+class OptionsGeneral(QtWidgets.QWidget):
+    def __init__(self, parent, settings: QtCore.QSettings):
+        super().__init__(parent)
+
+        self.settings = settings
+
+        layout = QtWidgets.QVBoxLayout(self)
+        self.setLayout(layout)
+
+        vbox = QtWidgets.QHBoxLayout(self)
+
+        vbox.addWidget(QtWidgets.QLabel('Buffer:'))
+
+        buffer = self.settings.value('buffer', 8192)
+
+        self.buffer_edit = QtWidgets.QLineEdit(str(buffer))
+        self.buffer_edit.setValidator(QIntValidator(parent=self))
+
+        vbox.addWidget(self.buffer_edit)
+
+        layout.addLayout(vbox)
+
+
+class Options(QtWidgets.QDialog):
+    def __init__(self, parent, settings: QtCore.QSettings):
+        super().__init__(parent)
+
+        self.tab_widget = QtWidgets.QTabWidget()
+
+        self.general = OptionsGeneral(self, settings)
+
+        layout = QtWidgets.QVBoxLayout(self)
+        self.setLayout(layout)
+
+        self.setWindowTitle(self.tr('Options', 'dialog_options'))
+
+        self.tab_widget.addTab(self.general, 'General')
+
+        layout.addWidget(self.tab_widget)
+
+        buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+
+        layout.addWidget(buttons)
+
+
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self) -> None:
         super().__init__()
@@ -72,6 +119,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setAcceptDrops(True)
 
         self.playlist_tabs.addtabButton.clicked.connect(self.new_tab)
+
     def dragEnterEvent(self, event):
         if event.mimeData().hasUrls():
             event.acceptProposedAction()
@@ -305,6 +353,18 @@ class MainWindow(QtWidgets.QMainWindow):
         self.close_tab_action.setStatusTip("Close current  tab")
         self.close_tab_action.setShortcut(QKeySequence("Ctrl+w"))
         self.close_tab_action.triggered.connect(self.close_current_tab)
+
+        self.open_options_action = QAction("Options", self)
+        self.open_options_action.setShortcut(QKeySequence("Ctrl+P"))
+        self.open_options_action.triggered.connect(self.open_options)
+
+    def open_options(self):
+        options = Options(self, self.settings)
+
+        if options.exec():
+            return True
+        else:
+            return False
 
     def setup_toolbar(self) -> None:
         toolbar: QToolBar = QToolBar("Toolbar")
