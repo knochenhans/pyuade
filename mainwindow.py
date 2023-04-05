@@ -5,6 +5,7 @@ import hashlib
 import ntpath
 import os
 import re
+import resource
 import webbrowser
 from pathlib import Path
 from xml.etree import ElementTree
@@ -17,7 +18,7 @@ from notifypy import Notify
 from PySide6 import QtCore, QtWidgets
 from PySide6.QtCore import (QCoreApplication, QDirIterator, QEvent,
                             QItemSelectionModel, QModelIndex, QSize, Qt)
-from PySide6.QtGui import QAction, QIcon, QKeySequence
+from PySide6.QtGui import QAction, QIcon, QKeySequence, QIntValidator
 from PySide6.QtWidgets import (QFileDialog, QLabel, QMenu, QProgressDialog,
                                QSlider, QStatusBar, QSystemTrayIcon, QToolBar)
 
@@ -46,8 +47,10 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.read_config()
 
+        self.settings = QtCore.QSettings('Andre Jonas', 'pyuade')
+
         uade.song_end.connect(self.item_finished)
-        uade.current_bytes_update.connect(self.timeline_update)
+        uade.current_seconds_update.connect(self.timeline_update_seconds)
         self.timeline.sliderPressed.connect(self.timeline_pressed)
         self.timeline.sliderReleased.connect(self.timeline_released)
 
@@ -379,6 +382,13 @@ class MainWindow(QtWidgets.QMainWindow):
 
         tree_cols: list[PlaylistItem] = []
 
+        if hasattr(song, 'subsong'):
+            duration = datetime.timedelta(seconds=song.subsong.bytes/176400)
+            subsong_nr = song.subsong.nr
+        else:
+            duration = datetime.timedelta(seconds=song.song_file.duration)
+            subsong_nr = 1
+
         for col in TREEVIEWCOL:
             item = PlaylistItem()
 
@@ -395,13 +405,13 @@ class MainWindow(QtWidgets.QMainWindow):
                 case TREEVIEWCOL.SONGNAME:
                     item.setText(song.song_file.modulename)
                 case TREEVIEWCOL.DURATION:
-                    item.setText(str(datetime.timedelta(seconds=song.subsong.bytes/176400)).split(".")[0])
+                    item.setText(str(duration).split(".")[0])
                 case TREEVIEWCOL.PLAYER:
                     item.setText(song.song_file.playername)
                 case TREEVIEWCOL.PATH:
                     item.setText(song.song_file.filename)
                 case TREEVIEWCOL.SUBSONG:
-                    item.setText(str(song.subsong.nr))
+                    item.setText(str(subsong_nr))
                 case TREEVIEWCOL.AUTHOR:
                     item.setText(song.song_file.author)
 
@@ -418,6 +428,7 @@ class MainWindow(QtWidgets.QMainWindow):
         except:
             print(f"Loading {filename} failed, song skipped")
         else:
+            print(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
             # self.song_files.append(song_file)
 
             subsongs = uade.split_subsongs(song_file)
@@ -720,9 +731,16 @@ class MainWindow(QtWidgets.QMainWindow):
         self.get_current_tab().selectionModel().select(self.get_current_tab().model().index(self.get_current_tab().current_row, 0),
                                                        QItemSelectionModel.SelectCurrent | QItemSelectionModel.Rows)
 
-        self.timeline.setMaximum(song.subsong.bytes)
+        # bytes = 0
+
+        # if hasattr(song, 'subsong'):
+        #     bytes = song.subsong.bytes
+        # else:
+        #     bytes = song.song_file.modulebytes
+
+        self.timeline.setMaximum(int(song.song_file.duration * 100))
         self.time_total.setText(str(datetime.timedelta(
-            seconds=song.subsong.bytes/176400)).split(".")[0])
+            seconds=song.song_file.duration)).split(".")[0])
 
         # Set current song (for pausing)
 
@@ -799,14 +817,23 @@ class MainWindow(QtWidgets.QMainWindow):
             self.set_play_status(row, False)
             self.play(row - 1)
 
+    # @ QtCore.Slot()
+    # def timeline_update(self, bytes: int) -> None:
+    #     if self.playerthread.status == PLAYERTHREADSTATUS.PLAYING:
+    #         if self.timeline_tracking:
+    #             self.timeline.setValue(bytes)
+
+    #         self.time.setText(str(datetime.timedelta(
+    #             seconds=bytes/176400)).split(".")[0])
+
     @ QtCore.Slot()
-    def timeline_update(self, bytes: int) -> None:
+    def timeline_update_seconds(self, seconds: float) -> None:
         if self.playerthread.status == PLAYERTHREADSTATUS.PLAYING:
             if self.timeline_tracking:
-                self.timeline.setValue(bytes)
+                self.timeline.setValue(int(seconds * 100))
 
             self.time.setText(str(datetime.timedelta(
-                seconds=bytes/176400)).split(".")[0])
+                seconds=seconds)).split(".")[0])
 
     @ QtCore.Slot()
     def timeline_pressed(self):
@@ -815,7 +842,8 @@ class MainWindow(QtWidgets.QMainWindow):
     @ QtCore.Slot()
     def timeline_released(self):
         self.timeline_tracking = True
-        uade.seek(self.timeline.sliderPosition())
+        # uade.seek(self.timeline.sliderPosition())
+        uade.seek_seconds(self.timeline.sliderPosition() / 100)
 
     @ QtCore.Slot()
     def delete_clicked(self):
@@ -880,7 +908,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 case PLAYERTHREADSTATUS.PAUSED:
                     # Pause -> play
                     self.play(self.get_current_tab().current_row)
-                    uade.seek(self.timeline.sliderPosition())
+                    uade.seek_seconds(self.timeline.sliderPosition())
                     self.play_action.setIcon(QIcon(path + "/pause.png"))
                 case (PLAYERTHREADSTATUS.PAUSED | PLAYERTHREADSTATUS.STOPPED):
                     # Play when stopped or paused
