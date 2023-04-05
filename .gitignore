@@ -5,3 +5,4 @@ pyuade.code-workspace
 .vscode
 .vscode/*
 .gitignore
+testing/*
