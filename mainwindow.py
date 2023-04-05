@@ -399,10 +399,10 @@ class MainWindow(QtWidgets.QMainWindow):
         file_menu.addAction(self.save_action)
 
         file_menu.addSeparator()
-        file_menu.addAction(self.quit_action)
-
-        file_menu.addSeparator()
         file_menu.addAction(self.open_options_action)
+        
+        file_menu.addSeparator()
+        file_menu.addAction(self.quit_action)
 
         edit_menu = menu.addMenu("&Edit")
         edit_menu.addAction(self.delete_action)
