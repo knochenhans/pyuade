@@ -88,9 +88,9 @@ class MainWindow(QtWidgets.QMainWindow):
                 playlist_export = jsonpickle.decode(playlist_file.read())
 
                 if isinstance(playlist_export, PlaylistExport):
-                    if playlist_export.songs:
-                        tree = self.add_tab(playlist_export.name)
+                    tree = self.add_tab(playlist_export.name)
 
+                    if playlist_export.songs:
                         for song in playlist_export.songs:
                             self.load_song(song, tree)
 

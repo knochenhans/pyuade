@@ -8,9 +8,12 @@ from uade import *
 
 
 class PlaylistExport():
-    def __init__(self, name: str = '', songs = None) -> None:
+    '''Playlist representation for export as playlist file'''
+    def __init__(self, name: str = '', songs=None, current_song=0, current_song_pos=0) -> None:
         self.name = name
         self.songs = songs
+        self.current_song = current_song
+        self.current_song_pos = current_song_pos
 
 
 class PlaylistItem(QStandardItem):
