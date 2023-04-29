@@ -51,6 +51,9 @@ class PlaylistTreeView(QTreeView):
         self.setRootIsDecorated(False)
         self.header().setMinimumSectionSize(20)
 
+    # def model(self) -> QtCore.QAbstractItemModel:
+    #     return super().model()
+
 
 class PlaylistTabBarEdit(QtWidgets.QLineEdit):
     def __init__(self, parent, rect: QRect) -> None:
@@ -118,6 +121,9 @@ class PlaylistTab(QtWidgets.QTabWidget):
 
     def remove_current_tab(self):
         self.removeTab(self.currentIndex())
+
+    # def widget(self, index: int) -> PlaylistTreeView:
+    #     return self.widget()
 
 
 class PlaylistModel(QStandardItemModel):

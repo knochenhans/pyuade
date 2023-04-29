@@ -8,16 +8,16 @@ class SongInfoDialog(QtWidgets.QDialog):
 
         attributes = {}
 
-        attributes["Author"] = song.song_file.author
-        attributes["Filename"] = song.song_file.filename
-        attributes["Format"] = song.song_file.formatname
-        attributes["Extension"] = song.song_file.ext
-        attributes["Size (Bytes)"] = str(song.song_file.modulebytes)
-        attributes["md5"] = song.song_file.modulemd5
-        attributes["Player"] = song.song_file.playername
-        attributes["Player filename"] = song.song_file.playerfname
+        attributes['Author'] = song.song_file.author
+        attributes['Filename'] = song.song_file.filename
+        attributes['Format'] = song.song_file.formatname
+        attributes['Extension'] = song.song_file.ext
+        attributes['Size (Bytes)'] = str(song.song_file.modulebytes)
+        attributes['md5'] = song.song_file.modulemd5
+        attributes['Player'] = song.song_file.playername
+        attributes['Player filename'] = song.song_file.playerfname
 
-        self.setWindowTitle("Song info")
+        self.setWindowTitle('Song info')
 
         QBtn = QtWidgets.QDialogButtonBox.Close
 

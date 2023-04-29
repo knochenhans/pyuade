@@ -20,14 +20,14 @@ class PlayerThread(QtCore.QThread):
         self.status = PLAYERTHREADSTATUS.STOPPED
         self.current_song: Song
 
-    def debugger_is_active(self) -> bool:
-        gettrace = getattr(sys, 'gettrace', lambda: None)
-        return gettrace() is not None
+    # def debugger_is_active(self) -> bool:
+    #     gettrace = getattr(sys, 'gettrace', lambda: None)
+    #     return gettrace() is not None
 
     def run(self):
-        self.setPriority(QtCore.QThread.Priority.TimeCriticalPriority)
-        if self.debugger_is_active():
-            debugpy.debug_this_thread()
+        # self.setPriority(QtCore.QThread.Priority.TimeCriticalPriority)
+        # if self.debugger_is_active():
+        debugpy.debug_this_thread()
 
         try:
             uade.prepare_play(self.current_song)
