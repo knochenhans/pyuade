@@ -23,7 +23,8 @@ from PySide6.QtWidgets import (QFileDialog, QLabel, QMenu, QProgressDialog,
                                QSlider, QStatusBar, QSystemTrayIcon, QToolBar)
 
 from ctypes_functions import *
-from playerthread import PLAYERTHREADSTATUS, PlayerThread
+from loader_thread import LoaderThread
+from player_thread import PLAYERTHREADSTATUS, PlayerThread
 from playlist import (PlaylistExport, PlaylistItem, PlaylistModel, PlaylistTab,
                       PlaylistTreeView)
 from songinfodialog import SongInfoDialog
@@ -95,6 +96,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.read_config()
 
         self.settings = QtCore.QSettings('Andre Jonas', 'pyuade')
+        self.loader_thread = LoaderThread(self)
 
         uade.song_end.connect(self.item_finished)
         uade.current_seconds_update.connect(self.timeline_update_seconds)
@@ -508,6 +510,9 @@ class MainWindow(QtWidgets.QMainWindow):
             return self.scan_and_load_files(filenames)
         return False
 
+    def scan_and_load_files(self, filenames: list[str]) -> bool:
+        if len(filenames) == 0:
+            return False
     def scan_and_load_files(self, filenames: list) -> bool:
         filename: str = ""
 
@@ -526,9 +531,9 @@ class MainWindow(QtWidgets.QMainWindow):
 
                     self.load_file(filename)
 
-            progress.setValue(len(filenames))
-            return True
-        return False
+        self.loader_thread.filenames = filenames
+        self.loader_thread.start()
+        return True
 
     def closeEvent(self, event: QEvent):
         self.write_config()
