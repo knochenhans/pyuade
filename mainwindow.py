@@ -232,6 +232,7 @@ class MainWindow(QtWidgets.QMainWindow):
         songs: list[Song] = []
 
         tab = self.playlist_tabs.widget(tab_nr)
+        tab_name = 'Unnamed Tab'
 
         if isinstance(tab, PlaylistTreeView):
             for row in range(tab.model().rowCount()):
