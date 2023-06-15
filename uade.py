@@ -95,7 +95,7 @@ class Uade(QObject):
 
         e: int = libuade.uade_get_event(byref(event), state)
 
-        print("event type: " + str(event.type))
+        print('event type: ' + str(event.type))
 
         return event
 
@@ -111,7 +111,7 @@ class Uade(QObject):
             self.state).contents
 
         if libuade.uade_seek(UADE_SEEK_MODE.UADE_SEEK_SUBSONG_RELATIVE, seconds, songinfo.subsongs.cur, self.state) != 0:
-            print("Seeking failed")
+            print('Seeking failed')
 
     @ QtCore.Slot()
     def position_changed(self, seconds: float):
