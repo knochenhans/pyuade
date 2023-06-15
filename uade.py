@@ -382,6 +382,7 @@ class Uade(QObject):
         if nbytes < 0:
             raise RuntimeError('Playback error.')
         elif nbytes == 0:
+            self.song_end.emit()
             raise EOFError('Song end.')
 
         self.current_seconds_update.emit(songinfo.subsongbytes/176400)
