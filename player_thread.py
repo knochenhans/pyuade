@@ -1,7 +1,7 @@
 from enum import IntEnum
 import sys
 
-import debugpy
+# import debugpy
 from PySide6 import QtCore
 
 from uade import Song, uade
@@ -27,7 +27,7 @@ class PlayerThread(QtCore.QThread):
     def run(self):
         # self.setPriority(QtCore.QThread.Priority.TimeCriticalPriority)
         # if self.debugger_is_active():
-        debugpy.debug_this_thread()
+        # debugpy.debug_this_thread()
 
         try:
             uade.prepare_play(self.current_song)

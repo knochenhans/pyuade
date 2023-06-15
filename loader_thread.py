@@ -1,6 +1,6 @@
 import os
 
-import debugpy
+#import debugpy
 from PySide6.QtCore import Qt, QThread
 from PySide6.QtWidgets import QProgressDialog
 
@@ -12,7 +12,7 @@ class LoaderThread(QThread):
         self.filenames: list[str] = []
 
     def run(self):
-        debugpy.debug_this_thread()
+        #debugpy.debug_this_thread()
 
         from mainwindow import MainWindow
 
