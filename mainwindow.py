@@ -90,6 +90,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setup_gui()
 
         self.current_tab = 0
+        self.current_row = 0
 
         self.player_thread = PlayerThread(self)
         self.loader_thread = LoaderThread(self)
@@ -833,6 +834,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.set_play_status(row, True)
 
+        self.current_row = row
+
     def play_file_thread(self, song: Song) -> None:
         self.player_thread.current_song = song
         self.player_thread.start()
@@ -862,9 +865,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.set_play_status(current_tab.current_row, False)
 
     def play_next_item(self) -> None:
-        index = self.current_selection.currentIndex()
-
-        row = index.row()
+        row = self.current_row
 
         current_tab = self.get_current_tab()
         if current_tab:
