@@ -784,7 +784,7 @@ class MainWindow(QtWidgets.QMainWindow):
             return
 
         # Stop the player if it's already playing
-        if self.player_thread.status == PLAYERTHREADSTATUS.PLAYING or PLAYERTHREADSTATUS.PAUSED:
+        if self.player_thread.status == (PLAYERTHREADSTATUS.PLAYING or PLAYERTHREADSTATUS.PAUSED):
             self.stop(False)
 
         # Get song from user data in column
