@@ -120,6 +120,16 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.playlist_tabs.addtabButton.clicked.connect(self.new_tab)
 
+    def filenames_from_paths(self, paths: list[str]) -> list[str]:
+        file_paths = []
+        for path in paths:
+            for root, directories, files in os.walk(path):
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    if os.path.isfile(file_path):
+                        file_paths.append(file_path)
+        return file_paths
+
     def dragEnterEvent(self, event):
         if event.mimeData().hasUrls():
             event.acceptProposedAction()
@@ -127,7 +137,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def dropEvent(self, event):
         if event.mimeData().hasUrls():
             filenames = [url.toLocalFile() for url in event.mimeData().urls()]
-            self.scan_and_load_files(filenames)
+            self.scan_and_load_files(self.filenames_from_paths(filenames))
 
     def load_playlist_as_tab(self, filename: str) -> None:
         try:
@@ -510,7 +520,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.load_song(subsong)
 
     def scan_and_load_folder(self, dir) -> bool:
-        filenames = [str(p) for p in Path(dir).rglob('*') if p.is_file()]
+        filenames = sorted([str(p) for p in Path(dir).rglob('*') if p.is_file()])
 
         if filenames:
             # filenames.sort()
@@ -520,6 +530,8 @@ class MainWindow(QtWidgets.QMainWindow):
     def scan_and_load_files(self, filenames: list[str]) -> bool:
         if len(filenames) == 0:
             return False
+        
+        filenames = self.filenames_from_paths(filenames)
 
         self.loader_thread.filenames = filenames
         self.loader_thread.start()

@@ -23,13 +23,10 @@ class LoaderThread(QThread):
             progress.setWindowModality(Qt.WindowModal)
 
             for i, filename in enumerate(self.filenames):
-                if os.path.isdir(filename):
-                    main_window.scan_and_load_folder(filename)
-                else:
-                    progress.setValue(i)
-                    if progress.wasCanceled():
-                        break
+                progress.setValue(i)
+                if progress.wasCanceled():
+                    break
 
-                    main_window.load_file(filename)
+                main_window.load_file(filename)
 
             progress.setValue(len(self.filenames))
