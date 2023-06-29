@@ -505,7 +505,7 @@ class MainWindow(QtWidgets.QMainWindow):
         try:
             song_file = uade.scan_song_file(filename)
         except:
-            print(f'Loading {filename} failed, song skipped')
+            print(f'Loading {filename.encode("utf-8", "surrogateescape").decode("ISO-8859-1")} failed, song skipped')
         else:
             print(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
             # self.song_files.append(song_file)
