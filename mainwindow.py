@@ -569,14 +569,18 @@ class MainWindow(QtWidgets.QMainWindow):
     def delete_selected_items(self):
         current_tab = self.get_current_tab()
         if current_tab:
-            while current_tab.selectionModel().selectedRows(0):
-                idx: QModelIndex = current_tab.selectionModel().selectedRows(0)[0]
+            selection_model = current_tab.selectionModel()
+            selected_rows = selection_model.selectedRows(0)
+            
+            # Build a list of row indices to remove
+            rows_to_remove = [idx.row() for idx in selected_rows]
 
-                # TODO: rebuild
-                # if idx.row() == current_tab.current_row:
-                #     current_tab.current_row = current_tab.indexBelow(current_tab.current_row)
+            # Sort the row indices in reverse order to maintain correct removal order
+            rows_to_remove.sort(reverse=True)
 
-                current_tab.model().removeRow(idx.row(), idx.parent())
+            # Remove the rows from the model
+            for row in rows_to_remove:
+                current_tab.model().removeRows(row, 1, QModelIndex())
 
     def keyPressEvent(self, event: QEvent):
         current_tab = self.get_current_tab()
@@ -789,65 +793,70 @@ class MainWindow(QtWidgets.QMainWindow):
         # TODO: why [0].row()?
         current_tab = self.get_current_tab()
         if current_tab:
-            self.play(current_tab.selectedIndexes()[0].row())
+            self.play(current_tab.selectedIndexes()[0].row(), False)
 
-    def play(self, row: int):
+    def play(self, row: int, continue_: bool = True):
         current_tab = self.get_current_tab()
 
         if not current_tab:
             return
-
-        # Stop the player if it's already playing
-        if self.player_thread.status in (PLAYERTHREADSTATUS.PLAYING, PLAYERTHREADSTATUS.PAUSED):
-            self.stop(False)
-
+        
         # Get song from user data in column
         song: Song = current_tab.model().itemFromIndex(current_tab.model().index(row, 0)).data(Qt.UserRole)
 
-        self.play_file_thread(song)
-        current_tab.current_row = row
+        # Stop the player if it's already playing
+        if not continue_:
+            if self.player_thread.status in (PLAYERTHREADSTATUS.PLAYING, PLAYERTHREADSTATUS.PAUSED):
+                self.stop(False)
 
-        # Select playing track
-        current_tab.selectionModel().select(current_tab.model().index(current_tab.current_row, 0), QItemSelectionModel.SelectCurrent | QItemSelectionModel.Rows)
+            self.play_file_thread(song)
+            current_tab.current_row = row
 
-        # bytes = 0
+            # Select playing track
+            current_tab.selectionModel().select(current_tab.model().index(current_tab.current_row, 0), QItemSelectionModel.SelectCurrent | QItemSelectionModel.Rows)
 
-        # if hasattr(song, 'subsong'):
-        #     bytes = song.subsong.bytes
-        # else:
-        #     bytes = song.song_file.modulebytes
+            # bytes = 0
 
-        # Set timeline and duration
-        self.timeline.setMaximum(int(song.song_file.duration * 100))
-        self.time_total.setText(str(datetime.timedelta(seconds=song.song_file.duration)).split('.')[0])
+            # if hasattr(song, 'subsong'):
+            #     bytes = song.subsong.bytes
+            # else:
+            #     bytes = song.song_file.modulebytes
 
-        # Set current song (for pausing)
-        #self.current_selection.setCurrentIndex(current_tab.model().index(current_tab.current_row, 0), QItemSelectionModel.SelectCurrent)
-        self.player_thread.current_song = song
+            # Set timeline and duration
+            self.timeline.setMaximum(int(song.song_file.duration * 100))
+            self.time_total.setText(str(datetime.timedelta(seconds=song.song_file.duration)).split('.')[0])
 
-        # Show notification
-        notification = Notify()
-        notification.title = 'Now playing'
-        notification.message = ''
-        if song.song_file.author:
-            notification.message += song.song_file.author + ' - '
-        if song.song_file.modulename:
-            notification.message += song.song_file.modulename + ' - '
-        notification.message += song.song_file.filename
-        notification.icon = os.path.join(path, 'play.png')
-        notification.send(block=False)
+            # Set current song (for pausing)
+            #self.current_selection.setCurrentIndex(current_tab.model().index(current_tab.current_row, 0), QItemSelectionModel.SelectCurrent)
+            self.player_thread.current_song = song
 
-        print(f'Now playing {song.song_file.filename}')
+            # Show notification
+            notification = Notify()
+            notification.title = 'Now playing'
+            notification.message = ''
+            if song.song_file.author:
+                notification.message += song.song_file.author + ' - '
+            if song.song_file.modulename:
+                notification.message += song.song_file.modulename + ' - '
+            notification.message += song.song_file.filename
+            notification.icon = os.path.join(path, 'play.png')
+            notification.send(block=False)
 
-        # Update UI
-        self.tray.setToolTip(f'Playing {song.song_file.filename}')
+            print(f'Now playing {song.song_file.filename}')
+            self.current_row = row
+            
+            # Update UI
+            self.tray.setToolTip(f'Playing {song.song_file.filename}')
+        else:
+            pass
+
         self.play_action.setIcon(QIcon(os.path.join(path, 'pause.png')))
         self.load_action.setEnabled(False)
-        self.setWindowTitle('pyuade - ' + song.song_file.modulename + ' - ' + song.song_file.filename)
+        self.setWindowTitle(f'pyuade - {song.song_file.modulename} - {song.song_file.filename}')
 
         self.set_play_status(row, True)
+        self.player_thread.status = PLAYERTHREADSTATUS.PLAYING
 
-        self.current_row = row
 
     def play_file_thread(self, song: Song) -> None:
         self.player_thread.current_song = song
@@ -885,7 +894,7 @@ class MainWindow(QtWidgets.QMainWindow):
             # current_index actually lists all columns, so for now just take the first col
             if row < current_tab.model().rowCount(current_tab.rootIndex()) - 1:
                 self.set_play_status(row, False)
-                self.play(row + 1)
+                self.play(row + 1, False)
 
     def play_previous_item(self) -> None:
         index = self.current_selection.currentIndex()
@@ -897,7 +906,7 @@ class MainWindow(QtWidgets.QMainWindow):
             # current_index actually lists all columns, so for now just take the first col
             if current_tab.current_row > 0:
                 self.set_play_status(row, False)
-                self.play(row - 1)
+                self.play(row - 1, False)
 
     # @ QtCore.Slot()
     # def timeline_update(self, bytes: int) -> None:
@@ -990,11 +999,10 @@ class MainWindow(QtWidgets.QMainWindow):
                     case PLAYERTHREADSTATUS.PAUSED:
                         # Pause -> play
                         self.play(current_tab.current_row)
-                        uade.seek_seconds(self.timeline.sliderPosition())
+                        # uade.seek_seconds(self.timeline.sliderPosition() / 100)
                         self.play_action.setIcon(QIcon(path + "/pause.png"))
-                    case (PLAYERTHREADSTATUS.PAUSED | PLAYERTHREADSTATUS.STOPPED):
-                        # Play when stopped or paused
-                        self.play(current_tab.current_row)
+                    case (PLAYERTHREADSTATUS.STOPPED):
+                        self.play(current_tab.current_row, False)
 
     @ QtCore.Slot()
     def stop_clicked(self):
