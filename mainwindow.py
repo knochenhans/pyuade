@@ -122,12 +122,18 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def filenames_from_paths(self, paths: list[str]) -> list[str]:
         file_paths = []
-        for path in paths:
-            for root, directories, files in os.walk(path):
+
+        def explore_directory(directory):
+            for root, _, files in os.walk(directory):
                 for file in files:
-                    file_path = os.path.join(root, file)
-                    if os.path.isfile(file_path):
-                        file_paths.append(file_path)
+                    file_paths.append(os.path.join(root, file))
+
+        for path in paths:
+            if os.path.isfile(path):
+                file_paths.append(path)
+            elif os.path.isdir(path):
+                explore_directory(path)
+
         return file_paths
 
     def dragEnterEvent(self, event):
@@ -137,7 +143,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def dropEvent(self, event):
         if event.mimeData().hasUrls():
             filenames = [url.toLocalFile() for url in event.mimeData().urls()]
-            self.scan_and_load_files(self.filenames_from_paths(filenames))
+            self.scan_and_load_files(filenames)
 
     def load_playlist_as_tab(self, filename: str) -> None:
         try:
@@ -520,7 +526,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.load_song(subsong)
 
     def scan_and_load_folder(self, dir) -> bool:
-        filenames = sorted([str(p) for p in Path(dir).rglob('*') if p.is_file()])
+        filenames = sorted([str(p) for p in Path(dir).rglob('*') if p.is_file()], key=lambda x: x.lower())
 
         if filenames:
             # filenames.sort()
@@ -530,8 +536,9 @@ class MainWindow(QtWidgets.QMainWindow):
     def scan_and_load_files(self, filenames: list[str]) -> bool:
         if len(filenames) == 0:
             return False
-        
+
         filenames = self.filenames_from_paths(filenames)
+        filenames.sort(key=lambda x: x.lower())
 
         self.loader_thread.filenames = filenames
         self.loader_thread.start()
@@ -571,7 +578,7 @@ class MainWindow(QtWidgets.QMainWindow):
         if current_tab:
             selection_model = current_tab.selectionModel()
             selected_rows = selection_model.selectedRows(0)
-            
+
             # Build a list of row indices to remove
             rows_to_remove = [idx.row() for idx in selected_rows]
 
@@ -800,7 +807,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         if not current_tab:
             return
-        
+
         # Get song from user data in column
         song: Song = current_tab.model().itemFromIndex(current_tab.model().index(row, 0)).data(Qt.UserRole)
 
@@ -844,7 +851,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
             print(f'Now playing {song.song_file.filename}')
             self.current_row = row
-            
+
             # Update UI
             self.tray.setToolTip(f'Playing {song.song_file.filename}')
         else:
@@ -856,7 +863,6 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.set_play_status(row, True)
         self.player_thread.status = PLAYERTHREADSTATUS.PLAYING
-
 
     def play_file_thread(self, song: Song) -> None:
         self.player_thread.current_song = song
