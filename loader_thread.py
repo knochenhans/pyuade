@@ -20,7 +20,7 @@ class LoaderThread(QThread):
 
         if isinstance(main_window, MainWindow) and len(self.filenames) > 0:
             progress = QProgressDialog('Scanning files...', 'Cancel', 0, len(self.filenames), main_window)
-            progress.setWindowModality(Qt.WindowModal)
+            progress.setWindowModality(Qt.WindowModality.WindowModal)
 
             for i, filename in enumerate(self.filenames):
                 progress.setValue(i)

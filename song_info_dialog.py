@@ -29,7 +29,7 @@ class SongInfoDialog(QtWidgets.QDialog):
         tableWidget = QtWidgets.QTableWidget(self)
         tableWidget.setRowCount(len(attributes))
         tableWidget.setColumnCount(2)
-        tableWidget.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Stretch)
+        tableWidget.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.ResizeMode.Stretch)
         tableWidget.horizontalHeader().hide()
         tableWidget.verticalHeader().hide()
         self.vboxlayout.addWidget(tableWidget)

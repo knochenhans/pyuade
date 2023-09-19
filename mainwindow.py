@@ -198,7 +198,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 index = current_tab.model().index(current_item_row, 0)
                 if index.isValid():
                     current_tab.current_row = current_item_row
-                    current_tab.selectionModel().select(index, QItemSelectionModel.SelectCurrent | QItemSelectionModel.Rows)
+                    current_tab.selectionModel().select(index, QItemSelectionModel.SelectionFlag.SelectCurrent | QItemSelectionModel.SelectionFlag.Rows)
 
                 # Load column width values
 
@@ -253,7 +253,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         if isinstance(tab, PlaylistTreeView):
             for row in range(tab.model().rowCount()):
-                song: Song = tab.model().itemFromIndex(tab.model().index(row, 0)).data(Qt.UserRole)
+                song: Song = tab.model().itemFromIndex(tab.model().index(row, 0)).data(Qt.ItemDataRole.UserRole)
 
                 songs.append(song)
             tab_name = self.playlist_tabs.tabBar().tabText(tab_nr)
@@ -401,9 +401,9 @@ class MainWindow(QtWidgets.QMainWindow):
         toolbar.addAction(self.next_action)
         # toolbar.addAction(self.test_action)
 
-        self.timeline = QSlider(Qt.Horizontal, self)
+        self.timeline = QSlider(Qt.Orientation.Horizontal, self)
         self.timeline.setRange(0, 100)
-        self.timeline.setFocusPolicy(Qt.NoFocus)
+        self.timeline.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.timeline.setPageStep(5)
         self.timeline.setTracking(False)
         # timeline.setStyleSheet("QSlider::handle:horizontal {background-color: red;}")
@@ -459,9 +459,9 @@ class MainWindow(QtWidgets.QMainWindow):
             col = current_tab.model().itemFromIndex(current_tab.model().index(row, 0))
 
             if enable:
-                col.setData(self.play_icon, Qt.DecorationRole)
+                col.setData(self.play_icon, Qt.ItemDataRole.DecorationRole)
             else:
-                col.setData(QIcon(), Qt.DecorationRole)
+                col.setData(QIcon(), Qt.ItemDataRole.DecorationRole)
 
     def load_song(self, song: Song, tab=None) -> None:
         # Add subsong to playlist
@@ -480,7 +480,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
             # Store song data in first column
             if col == 0:
-                item.setData(song, Qt.UserRole)
+                item.setData(song, Qt.ItemDataRole.UserRole)
 
             match col:
                 case TREEVIEWCOL.PLAYING:
@@ -594,7 +594,7 @@ class MainWindow(QtWidgets.QMainWindow):
         current_tab = self.get_current_tab()
         if current_tab:
             if current_tab.selectionModel().selectedRows(0):
-                if event.key() == Qt.Key_Delete:
+                if event.key() == Qt.Key.Key_Delete:
                     self.delete_selected_items()
 
     # @ QtCore.Slot()
@@ -613,7 +613,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
             row = index.row()
 
-            song: Song = current_tab.model().itemFromIndex(current_tab.model().index(row, 0)).data(Qt.UserRole)
+            song: Song = current_tab.model().itemFromIndex(current_tab.model().index(row, 0)).data(Qt.ItemDataRole.UserRole)
 
             dialog = SongInfoDialog(song)
             dialog.setWindowTitle(f'Song info for {song.song_file.filename}')
@@ -639,7 +639,7 @@ class MainWindow(QtWidgets.QMainWindow):
         with requests.Session() as session:
             for index in indexes:
                 row = index.row()
-                song: Song = current_tab.model().itemFromIndex(current_tab.model().index(row, 0)).data(Qt.UserRole)
+                song: Song = current_tab.model().itemFromIndex(current_tab.model().index(row, 0)).data(Qt.ItemDataRole.UserRole)
 
                 md5 = hashlib.md5()
 
@@ -742,7 +742,7 @@ class MainWindow(QtWidgets.QMainWindow):
             row = index.row()
 
             song: Song = self.get_current_tab().model().itemFromIndex(
-                self.get_current_tab().model().index(row, 0)).data(Qt.UserRole)
+                self.get_current_tab().model().index(row, 0)).data(Qt.ItemDataRole.UserRole)
 
             song.song_file.author = self.scrape_modland(song, "Author(s)")
 
@@ -755,7 +755,7 @@ class MainWindow(QtWidgets.QMainWindow):
         row = self.get_current_tab().selectedIndexes()[0].row()
 
         song: Song = self.get_current_tab().model().itemFromIndex(
-            self.get_current_tab().model().index(row, 0)).data(Qt.UserRole)
+            self.get_current_tab().model().index(row, 0)).data(Qt.ItemDataRole.UserRole)
 
         sha1 = hashlib.sha1()
 
@@ -830,7 +830,7 @@ class MainWindow(QtWidgets.QMainWindow):
             return
 
         # Get song from user data in column
-        song: Song = current_tab.model().itemFromIndex(current_tab.model().index(row, 0)).data(Qt.UserRole)
+        song: Song = current_tab.model().itemFromIndex(current_tab.model().index(row, 0)).data(Qt.ItemDataRole.UserRole)
 
         # Stop the player if it's already playing
         if not continue_:
@@ -841,7 +841,7 @@ class MainWindow(QtWidgets.QMainWindow):
             current_tab.current_row = row
 
             # Select playing track
-            current_tab.selectionModel().select(current_tab.model().index(current_tab.current_row, 0), QItemSelectionModel.SelectCurrent | QItemSelectionModel.Rows)
+            current_tab.selectionModel().select(current_tab.model().index(current_tab.current_row, 0), QItemSelectionModel.SelectionFlag.SelectCurrent | QItemSelectionModel.SelectionFlag.Rows)
 
             # bytes = 0
 
@@ -963,7 +963,7 @@ class MainWindow(QtWidgets.QMainWindow):
         if self.player_thread.status != PLAYERTHREADSTATUS.PLAYING:
             last_open_path = self.config.get('files', 'last_open_path', fallback='.')
             dir = QFileDialog.getExistingDirectory(
-                self, 'Open music folder', last_open_path, QFileDialog.ShowDirsOnly)
+                self, 'Open music folder', last_open_path, QFileDialog.Option.ShowDirsOnly)
             if dir:
                 self.scan_and_load_folder(dir)
                 self.config.set('files', 'last_open_path', os.path.abspath(dir))

@@ -9,6 +9,7 @@ from uade import *
 
 class PlaylistExport():
     '''Playlist representation for export as playlist file'''
+
     def __init__(self, name: str = '', songs=None, current_song=0, current_song_pos=0) -> None:
         self.name = name
         self.songs = songs
@@ -21,7 +22,7 @@ class PlaylistItem(QStandardItem):
         super().__init__()
 
     def flags(self, index):
-        return QtGui.Qt.NoItemFlags
+        return QtGui.Qt.ItemFlag.NoItemFlags
 
     # def dropEvent(self):
     #     print('test')
@@ -38,12 +39,12 @@ class PlaylistTreeView(QTreeView):
         # Currently playing row for this tab
         self.current_row: int = 0
 
-        self.setDragDropMode(self.InternalMove)
-        self.setSelectionMode(self.ExtendedSelection)
-        self.setSelectionBehavior(self.SelectRows)
-        self.setEditTriggers(self.NoEditTriggers)
+        self.setDragDropMode(self.DragDropMode.InternalMove)
+        self.setSelectionMode(self.SelectionMode.ExtendedSelection)
+        self.setSelectionBehavior(self.SelectionBehavior.SelectRows)
+        self.setEditTriggers(self.EditTrigger.NoEditTriggers)
 
-        self.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
 
         self.setColumnWidth(0, 20)
 
@@ -63,10 +64,10 @@ class PlaylistTabBarEdit(QtWidgets.QLineEdit):
         self.textChanged.connect(parent.tabBar().rename)
         self.editingFinished.connect(parent.tabBar().editing_finished)
         self.returnPressed.connect(self.close)
-        #TODO: self.inputRejected.connect(self.close)
+        # TODO: self.inputRejected.connect(self.close)
 
     def keyPressEvent(self, event: QKeyEvent):
-        if event.key() == Qt.Key_Escape:
+        if event.key() == Qt.Key.Key_Escape:
             self.close()
 
         super().keyPressEvent(event)
@@ -107,7 +108,7 @@ class PlaylistTab(QtWidgets.QTabWidget):
 
         self.addtabButton = QToolButton()
         self.addtabButton.setText(' + ')
-        self.setCornerWidget(self.addtabButton, Qt.TopRightCorner)
+        self.setCornerWidget(self.addtabButton, Qt.Corner.TopRightCorner)
 
     @ QtCore.Slot()
     def doubleClicked(self, index) -> None:
@@ -134,11 +135,11 @@ class PlaylistModel(QStandardItemModel):
         default_flags = super().flags(index)
 
         if index.isValid():
-            return Qt.ItemIsEnabled | Qt.ItemIsSelectable | Qt.ItemIsDragEnabled
+            return Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable | Qt.ItemFlag.ItemIsDragEnabled
 
         return default_flags
 
     def dropMimeData(self, data, action, row, col, parent):
         # Prevent shifting colums
-        response = super().dropMimeData(data, Qt.CopyAction, row, 0, parent)
+        response = super().dropMimeData(data, Qt.DropAction.CopyAction, row, 0, parent)
         return response
