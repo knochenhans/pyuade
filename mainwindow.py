@@ -15,7 +15,8 @@ import jsonpickle
 import requests
 from appdirs import user_config_dir
 from bs4 import BeautifulSoup
-from notifypy import Notify
+from pynotifier import Notification, NotificationClient
+from pynotifier.backends import platform
 from PySide6 import QtCore, QtWidgets
 from PySide6.QtCore import (QCoreApplication, QEvent, QItemSelectionModel,
                             QModelIndex, QSize, Qt)
@@ -802,6 +803,26 @@ class MainWindow(QtWidgets.QMainWindow):
         if current_tab:
             self.play(current_tab.selectedIndexes()[0].row(), False)
 
+    def show_song_notification(self, song: Song):
+        notification_title = 'Now playing'
+
+        notification_message = ''
+        if song.song_file.author:
+            notification_message += song.song_file.author + ' - '
+        if song.song_file.modulename:
+            notification_message += song.song_file.modulename + ' - '
+        notification_message += song.song_file.filename
+
+        notification = Notification(
+            title=notification_title,
+            message=notification_message,
+            icon_path=os.path.join(path, 'play.png')
+        )
+
+        c = NotificationClient()
+        c.register_backend(platform.Backend())
+        c.notify_all(notification)
+
     def play(self, row: int, continue_: bool = True):
         current_tab = self.get_current_tab()
 
@@ -838,16 +859,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.player_thread.current_song = song
 
             # Show notification
-            notification = Notify()
-            notification.title = 'Now playing'
-            notification.message = ''
-            if song.song_file.author:
-                notification.message += song.song_file.author + ' - '
-            if song.song_file.modulename:
-                notification.message += song.song_file.modulename + ' - '
-            notification.message += song.song_file.filename
-            notification.icon = os.path.join(path, 'play.png')
-            notification.send(block=False)
+            self.show_song_notification(song)
 
             print(f'Now playing {song.song_file.filename}')
             self.current_row = row
