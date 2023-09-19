@@ -25,9 +25,9 @@ class PlayerThread(QtCore.QThread):
     #     return gettrace() is not None
 
     def run(self):
-        # self.setPriority(QtCore.QThread.Priority.TimeCriticalPriority)
+        self.setPriority(QtCore.QThread.Priority.HighestPriority)
         # if self.debugger_is_active():
-        # debugpy.debug_this_thread()
+        debugpy.debug_this_thread()
 
         try:
             uade.prepare_play(self.current_song)
