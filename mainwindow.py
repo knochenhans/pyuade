@@ -484,7 +484,7 @@ class MainWindow(QtWidgets.QMainWindow):
             match col:
                 case TREEVIEWCOL.PLAYING:
                     item.setText('')
-                    #item.setData(QIcon(path + "/play.png"), Qt.DecorationRole)
+                    # item.setData(QIcon(path + "/play.png"), Qt.DecorationRole)
                 case TREEVIEWCOL.FILENAME:
                     item.setText(ntpath.basename(song.song_file.filename))
                 case TREEVIEWCOL.SONGNAME:
@@ -834,7 +834,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.time_total.setText(str(datetime.timedelta(seconds=song.song_file.duration)).split('.')[0])
 
             # Set current song (for pausing)
-            #self.current_selection.setCurrentIndex(current_tab.model().index(current_tab.current_row, 0), QItemSelectionModel.SelectCurrent)
+            # self.current_selection.setCurrentIndex(current_tab.model().index(current_tab.current_row, 0), QItemSelectionModel.SelectCurrent)
             self.player_thread.current_song = song
 
             # Show notification
@@ -970,7 +970,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
             if filenames:
                 if self.scan_and_load_files(filenames):
-                    self.config["files"]["last_open_path"] = os.path.dirname(
+                    self.config['files']['last_open_path'] = os.path.dirname(
                         os.path.abspath(filenames[0]))
 
     @ QtCore.Slot()
@@ -1006,7 +1006,7 @@ class MainWindow(QtWidgets.QMainWindow):
                         # Pause -> play
                         self.play(current_tab.current_row)
                         # uade.seek_seconds(self.timeline.sliderPosition() / 100)
-                        self.play_action.setIcon(QIcon(path + "/pause.png"))
+                        self.play_action.setIcon(QIcon(path + '/pause.png'))
                     case (PLAYERTHREADSTATUS.STOPPED):
                         self.play(current_tab.current_row, False)
 
