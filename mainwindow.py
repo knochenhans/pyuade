@@ -167,43 +167,43 @@ class MainWindow(QtWidgets.QMainWindow):
         self.config['window'] = {}
         self.config['files'] = {}
 
-        if self.config.read(os.path.join(user_config_dir(self.appname), 'config.ini')):
-            window_config = self.config['window']
-            files_config = self.config['files']
+        self.config.read(os.path.join(user_config_dir(self.appname), 'config.ini'))
+        window_config = self.config['window']
+        files_config = self.config['files']
 
-            self.resize(int(window_config.get('width', '800')),
-                        int(window_config.get('height', '600')))
+        self.resize(int(window_config.get('width', '800')),
+                    int(window_config.get('height', '600')))
 
-            # Load playlist from files add as tabs
-            # TODO: do this using md5 of song files?
+        # Load playlist from files add as tabs
+        # TODO: do this using md5 of song files?
 
-            playlist_filenames = glob.glob(os.path.join(user_config_dir(self.appname), 'playlist-*.json'))
-            playlist_filenames.sort()
+        playlist_filenames = glob.glob(os.path.join(user_config_dir(self.appname), 'playlist-*.json'))
+        playlist_filenames.sort()
 
-            if len(playlist_filenames) > 0:
-                for playlist_filename in playlist_filenames:
-                    try:
-                        self.load_playlist_as_tab(playlist_filename)
-                    except Exception as e:
-                        print(f'Error while loading playlist {playlist_filename}: {e}')
-                        self.add_tab('Default')
-            else:
-                self.add_tab('Default')
+        if len(playlist_filenames) > 0:
+            for playlist_filename in playlist_filenames:
+                try:
+                    self.load_playlist_as_tab(playlist_filename)
+                except Exception as e:
+                    print(f'Error while loading playlist {playlist_filename}: {e}')
+                    self.add_tab('Default')
+        else:
+            self.add_tab('Default')
 
-            current_item_row = int(files_config.get('current_item', '0'))
+        current_item_row = int(files_config.get('current_item', '0'))
 
-            current_tab = self.get_current_tab()
+        current_tab = self.get_current_tab()
 
-            if current_tab:
-                index = current_tab.model().index(current_item_row, 0)
-                if index.isValid():
-                    current_tab.current_row = current_item_row
-                    current_tab.selectionModel().select(index, QItemSelectionModel.SelectionFlag.SelectCurrent | QItemSelectionModel.SelectionFlag.Rows)
+        if current_tab:
+            index = current_tab.model().index(current_item_row, 0)
+            if index.isValid():
+                current_tab.current_row = current_item_row
+                current_tab.selectionModel().select(index, QItemSelectionModel.SelectionFlag.SelectCurrent | QItemSelectionModel.SelectionFlag.Rows)
 
-                # Load column width values
+            # Load column width values
 
-                for c in range(current_tab.model().columnCount()):
-                    current_tab.header().resizeSection(c, int(window_config.get(f'col{str(c)}_width', '100')))
+            for c in range(current_tab.model().columnCount()):
+                current_tab.header().resizeSection(c, int(window_config.get(f'col{str(c)}_width', '100')))
 
     def write_config(self) -> None:
         window_config = self.config['window']
