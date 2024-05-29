@@ -503,7 +503,9 @@ class MainWindow(QtWidgets.QMainWindow):
 
             tree_cols.append(item)
 
-        if not tab:
+        if tab:
+            tab.model().appendRow(tree_cols)
+        else:
             tab = self.get_current_tab()
 
         tab.model().appendRow(tree_cols)
