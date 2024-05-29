@@ -735,7 +735,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     @ QtCore.Slot()
     def lookup_modland_clicked(self):
-        # Experimental lookup in modland database
+        # Experimental lookup in modland database via MSM
 
         indexes = self.get_current_tab().selectionModel().selectedRows(0)
 
@@ -746,10 +746,65 @@ class MainWindow(QtWidgets.QMainWindow):
             song: Song = self.get_current_tab().model().itemFromIndex(
                 self.get_current_tab().model().index(row, 0)).data(Qt.ItemDataRole.UserRole)
 
-            song.song_file.author = self.scrape_modland(song, "Author(s)")
+            # song.song_file.author = self.scrape_modland(song, "Author(s)")
+            # Get MSM data
+            data = self.scrape_msm(song)
 
-            self.get_current_tab().model().itemFromIndex(self.get_current_tab().model().index(
-                row, TREEVIEWCOL.AUTHOR)).setText(song.song_file.author)
+            # Check for url containing modarchive.org
+            if 'urls' in data:
+                for url in data['urls']:
+                    if 'modarchive.org' in url:
+                        webbrowser.open(url, new=2)
+                        break
+
+            # self.get_current_tab().model().itemFromIndex(self.get_current_tab().model().index(
+            #     row, TREEVIEWCOL.AUTHOR)).setText(song.song_file.author)
+            
+    @ QtCore.Slot()
+    def scrape_msm(self, song: Song) -> dict:
+        # Lookup in .Mod Sample Master database via sha1 and return data
+        return_data = {}
+
+        sha1 = hashlib.sha1()
+
+        with open(song.song_file.filename, 'rb') as f:
+            data = f.read()
+
+            if data:
+                sha1.update(data)
+
+                url = "https://modsamplemaster.thegang.nu/module.php?sha1=" + sha1.hexdigest()
+
+                response = requests.get(url)
+                if response.status_code == 200:
+                    website = requests.get(url)
+                    results = BeautifulSoup(website.content, 'html5lib')
+
+                    page = results.find('div', class_='page')
+                    if page:
+                        # Check if we have a result
+                        name = page.find('h1')
+
+                        if name.text:
+                            return_data['name'] = name.text
+
+                            # Find h1 "Links"
+                            links = page.find('h1', string='Links')
+                            details = links.find_next_sibling('div')
+
+                            if details:
+                                # Read all list items
+                                list_items = details.find_all('li')
+
+                                urls = []
+
+                                # Loop through all list items and add them to the return_data
+                                for item in list_items:
+                                    urls.append(item.text)
+
+                                return_data['urls'] = urls
+
+        return return_data
 
     @ QtCore.Slot()
     def lookup_msm_clicked(self):
