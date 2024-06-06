@@ -838,8 +838,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
     @ QtCore.Slot()
     def quit_clicked(self):
-        self.stop(False)
-        self.player_thread.wait()
+        # self.stop(False)
+        # self.player_thread.wait()
         QCoreApplication.quit()
 
     @ QtCore.Slot()
