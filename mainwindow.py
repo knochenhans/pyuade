@@ -503,12 +503,12 @@ class MainWindow(QtWidgets.QMainWindow):
 
             tree_cols.append(item)
 
-        if tab:
-            tab.model().appendRow(tree_cols)
-        else:
+        if not tab:
             tab = self.get_current_tab()
 
-        tab.model().appendRow(tree_cols)
+        if tab:
+            tab.model().appendRow(tree_cols)
+
 
     def load_file(self, filename: str) -> None:
         try:
