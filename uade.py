@@ -3,7 +3,7 @@ from PySide6 import QtCore
 from PySide6.QtCore import QObject, Signal
 
 from ctypes_functions import *
-
+from .utils.log import log, LOG_TYPE 
 
 class SubsongData():
     def __init__(self) -> None:
@@ -95,7 +95,7 @@ class Uade(QObject):
 
         e: int = libuade.uade_get_event(byref(event), state)
 
-        print('event type: ' + str(event.type))
+        log(LOG_TYPE.INFO, f'event type: {event.type}')
 
         return event
 
@@ -111,7 +111,7 @@ class Uade(QObject):
             self.state).contents
 
         if libuade.uade_seek(UADE_SEEK_MODE.UADE_SEEK_SUBSONG_RELATIVE, seconds, songinfo.subsongs.cur, self.state) != 0:
-            print('Seeking failed')
+            log(LOG_TYPE.ERROR, 'Seeking failed')
 
     @ QtCore.Slot()
     def position_changed(self, seconds: float):
@@ -275,7 +275,7 @@ class Uade(QObject):
                     if s:
                         subsong.subsong = s
                 except:
-                    print(f'Playback error while scanning, discarding song: {song_file.filename}')
+                    log(LOG_TYPE.ERROR, f'Playback error while scanning, discarding song: {song_file.filename}')
 
                 songs.append(subsong)
 
@@ -334,31 +334,31 @@ class Uade(QObject):
         if libuade.uade_read_notification(notification, self.state) == 1:
             if notification.type == UADE_NOTIFICATION_TYPE.UADE_NOTIFICATION_MESSAGE:
                 if notification_union.msg:
-                    print("Amiga message: " + notification_union.msg.decode())
+                    log(LOG_TYPE.INFO, "Amiga message: " + notification_union.msg.decode())
             elif notification.type == UADE_NOTIFICATION_TYPE.UADE_NOTIFICATION_SONG_END:
                 # self.song_end.emit()
 
                 if notification_song_end.happy != 0:
-                    print("song_end.happy: " + str(notification_song_end.happy))
+                    log(LOG_TYPE.INFO, "song_end.happy: " + str(notification_song_end.happy))
 
                 if notification_song_end.stopnow != 0:
-                    print("song_end.stopnow: " +
+                    log(LOG_TYPE.INFO, "song_end.stopnow: " +
                           str(notification_song_end.stopnow))
 
                 if notification_song_end.subsong != 0:
-                    print("song_end.subsong: " +
+                    log(LOG_TYPE.INFO, "song_end.subsong: " +
                           str(notification_song_end.subsong))
 
                 if notification_song_end.subsongbytes != 0:
-                    print("song_end.subsongbytes: " +
+                    log(LOG_TYPE.INFO, "song_end.subsongbytes: " +
                           str(notification_song_end.subsongbytes))
 
                 if notification_song_end.reason:
-                    print("song_end.reason: " + notification_song_end.reason)
+                    log(LOG_TYPE.INFO, "song_end.reason: " + notification_song_end.reason)
 
                 return False
             else:
-                print("Unknown notification type from libuade")
+                log(LOG_TYPE.INFO, "Unknown notification type from libuade")
 
             libuade.uade_cleanup_notification(notification)
 
@@ -375,7 +375,7 @@ class Uade(QObject):
             self.state).contents
 
         if libuade.uade_is_seeking(self.state) == 1:
-            print("Currently seeking...")
+            log(LOG_TYPE.INFO, "Currently seeking...")
 
         nbytes = libuade.uade_read(self.buf, self.buf_len, self.state)
 
@@ -446,7 +446,7 @@ class Uade(QObject):
         # print("Stop playing")
 
         if libuade.uade_stop(self.state) != 0:
-            print("uade_stop error")
+            log(LOG_TYPE.ERROR, "uade_stop error")
 
         libuade.uade_cleanup_state(self.state)
 

@@ -32,6 +32,7 @@ from playlist import (PlaylistExport, PlaylistItem, PlaylistModel, PlaylistTab,
 from song_info_dialog import SongInfoDialog
 from uade import Song, uade
 from util import TREEVIEWCOL, path
+from .utils.log import log, LOG_TYPE
 
 
 class OptionsGeneral(QtWidgets.QWidget):
@@ -185,7 +186,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 try:
                     self.load_playlist_as_tab(playlist_filename)
                 except Exception as e:
-                    print(f'Error while loading playlist {playlist_filename}: {e}')
+                    log(LOG_TYPE.ERROR, f'Error while loading playlist {playlist_filename}: {e}')
                     self.add_tab('Default')
         else:
             self.add_tab('Default')
@@ -514,7 +515,7 @@ class MainWindow(QtWidgets.QMainWindow):
         try:
             song_file = uade.scan_song_file(filename)
         except:
-            print(f'Loading {filename.encode("utf-8", "surrogateescape").decode("ISO-8859-1")} failed, song skipped')
+            log(LOG_TYPE.ERROR, f'Loading {filename.encode("utf-8", "surrogateescape").decode("ISO-8859-1")} failed, song skipped')
         else:
             print(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
             # self.song_files.append(song_file)
@@ -632,7 +633,7 @@ class MainWindow(QtWidgets.QMainWindow):
         license_file = Path(user_config_dir(self.appname)) / 'modarchive-api.key'
 
         if not license_file.exists():
-            print('No modarchive-api.key found in config folder!')
+            log(LOG_TYPE.ERROR, 'No modarchive-api.key found in config folder!')
             return
 
         with open(license_file, 'r') as f:
@@ -645,7 +646,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
                 md5 = hashlib.md5()
 
-                print(f'Looking up {song.song_file.filename} in ModArchive.')
+                log(LOG_TYPE.INFO, f'Looking up {song.song_file.filename} in ModArchive.')
 
                 with open(song.song_file.filename, 'rb') as f:
                     data = f.read()
@@ -665,7 +666,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
                         if xml_module:
                             if int(xml_tree.find('results').text) > 0:
-                                print(f'ModArchive Metadata found for {song.song_file.filename}.')
+                                log(LOG_TYPE.SUCCESS, f'ModArchive Metadata found for {song.song_file.filename}.')
                                 xml_artist_info = xml_module.find('artist_info')
 
                                 for artist_idx in range(int(xml_artist_info.find('artists').text)):
@@ -673,13 +674,13 @@ class MainWindow(QtWidgets.QMainWindow):
 
                                     song.song_file.author = xml_artist.find('alias').text
 
-                                    print(f'Artist {song.song_file.author} found for {song.song_file.filename}.')
+                                    log(LOG_TYPE.INFO, f'Artist {song.song_file.author} found for {song.song_file.filename}.')
 
                             else:
-                                print(f'More than 1 results for md5 of {song.song_file.filename} found!')
+                                log(LOG_TYPE.WARNING, f'More than 1 results for md5 of {song.song_file.filename} found!')
 
                         else:
-                            print(f'No ModArchive results found for {song.song_file.filename}!')
+                            log(LOG_TYPE.WARNING, f'No ModArchive results found for {song.song_file.filename}!')
 
     @ QtCore.Slot()
     def scrape_modland(self, song: Song, column: str) -> str:
@@ -918,7 +919,7 @@ class MainWindow(QtWidgets.QMainWindow):
             # Show notification
             self.show_song_notification(song)
 
-            print(f'Now playing {song.song_file.filename}')
+            log(LOG_TYPE.INFO, f'Now playing {song.song_file.filename}')
             self.current_row = row
 
             # Update UI
@@ -1093,6 +1094,6 @@ class MainWindow(QtWidgets.QMainWindow):
 
     @ QtCore.Slot()
     def item_finished(self):
-        print(f'End of {self.player_thread.current_song.song_file.filename} reached')
+        log(LOG_TYPE.INFO, f'End of {self.player_thread.current_song.song_file.filename} reached')
         self.stop(False)
         self.play_next_item()

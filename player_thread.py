@@ -5,6 +5,7 @@ import sys
 from PySide6 import QtCore
 
 from uade import Song, uade
+from .utils.log import log, LOG_TYPE 
 
 
 class PLAYERTHREADSTATUS(IntEnum):
@@ -32,7 +33,7 @@ class PlayerThread(QtCore.QThread):
         try:
             uade.prepare_play(self.current_song)
         except Exception as e:
-            print(f'prepare_play() failed: {e}')
+            log(LOG_TYPE.ERROR, f'prepare_play() failed: {e}')
 
         while self.status == PLAYERTHREADSTATUS.PLAYING:
             try:
@@ -43,6 +44,6 @@ class PlayerThread(QtCore.QThread):
                 print(e)
             except Exception as e:
                 self.status = PLAYERTHREADSTATUS.STOPPED
-                print(f'play_threaded() failed: {e}')
+                log(LOG_TYPE.ERROR, f'play_threaded() failed: {e}')
 
         uade.stop()
