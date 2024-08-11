@@ -1,25 +1,35 @@
+from ctypes import (
+    CDLL,
+    RTLD_GLOBAL,
+    c_void_p,
+    c_size_t,
+    c_char_p,
+    c_ssize_t,
+    POINTER,
+    c_uint,
+)
 import sys
 from ctypes.util import find_library
 
 from ctypes_classes import *
 
-bencode_path = find_library('bencodetools')
+bencode_path = find_library("bencodetools")
 if not bencode_path:
-    sys.exit('Error: bencodetools not found')
+    sys.exit("Error: bencodetools not found")
 
 try:
     CDLL(bencode_path, mode=RTLD_GLOBAL)
 except OSError as e:
-    sys.exit(f'Error loading bencodetools: {e}')
+    sys.exit(f"Error loading bencodetools: {e}")
 
-uade_path = find_library('uade')
+uade_path = find_library("uade")
 if not uade_path:
-    sys.exit('Error: uade not found')
+    sys.exit("Error: uade not found")
 
 try:
     libuade = CDLL(uade_path, mode=RTLD_GLOBAL)
 except OSError as e:
-    sys.exit(f'Error loading uade: {e}')
+    sys.exit(f"Error loading uade: {e}")
 
 
 # State management

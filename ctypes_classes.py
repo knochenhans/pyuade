@@ -1,4 +1,18 @@
-from ctypes import *
+from ctypes import (
+    Structure,
+    POINTER,
+    c_char,
+    c_char_p,
+    c_int,
+    c_size_t,
+    c_double,
+    c_uint64,
+    c_ubyte,
+    c_int64,
+    Union,
+    c_float,
+    c_void_p,
+)
 from enum import IntEnum
 
 PATH_MAX = 4096
@@ -12,16 +26,11 @@ class uade_path(Structure):
 
 
 class uade_ep_options(Structure):
-    _fields_ = [
-        ("o", c_char * 256),
-        ("s", c_size_t)
-    ]
+    _fields_ = [("o", c_char * 256), ("s", c_size_t)]
 
 
 class uade_ao_options(Structure):
-    _fields_ = [
-        ("o", c_char * 256)
-    ]
+    _fields_ = [("o", c_char * 256)]
 
 
 class uade_subsong_info(Structure):
@@ -71,7 +80,6 @@ class uade_detection_info(Structure):
     _fields_ = [
         ("custom", c_int),
         ("content", c_int),
-
         ("ext", c_char * UADE_MAX_EXT_LEN),
         ("ep", POINTER(eagleplayer)),
     ]
@@ -86,12 +94,10 @@ class uade_song_info(Structure):
         ("duration", c_double),
         ("subsongbytes", c_uint64),
         ("songbytes", c_uint64),
-
         ("modulefname", c_char * PATH_MAX),
         ("playerfname", c_char * PATH_MAX),
         ("formatname", c_char * 256),
         ("modulename", c_char * 256),
-
         ("playername", c_char * 256),
     ]
 
@@ -126,24 +132,24 @@ class uade_notification(Structure):
 
 
 class UADE_SEEK_MODE(IntEnum):
-    UADE_SEEK_NOT_SEEKING = 0,
-    UADE_SEEK_SONG_RELATIVE = 1,
-    UADE_SEEK_SUBSONG_RELATIVE = 2,
-    UADE_SEEK_POSITION_RELATIVE = 3,
+    UADE_SEEK_NOT_SEEKING = 0
+    UADE_SEEK_SONG_RELATIVE = 1
+    UADE_SEEK_SUBSONG_RELATIVE = 2
+    UADE_SEEK_POSITION_RELATIVE = 3
 
 
 class UADE_EVENT_TYPE(IntEnum):
-    UADE_EVENT_INVALID = 0,
-    UADE_EVENT_DATA = 1,
-    UADE_EVENT_EAGAIN = 2,
-    UADE_EVENT_FORMAT_NAME = 3,
-    UADE_EVENT_MESSAGE = 4,
-    UADE_EVENT_MODULE_NAME = 5,
-    UADE_EVENT_PLAYER_NAME = 6,
-    UADE_EVENT_READY = 7,
-    UADE_EVENT_REQUEST_AMIGA_FILE = 8,
-    UADE_EVENT_SONG_END = 9,
-    UADE_EVENT_SUBSONG_INFO = 10,
+    UADE_EVENT_INVALID = 0
+    UADE_EVENT_DATA = 1
+    UADE_EVENT_EAGAIN = 2
+    UADE_EVENT_FORMAT_NAME = 3
+    UADE_EVENT_MESSAGE = 4
+    UADE_EVENT_MODULE_NAME = 5
+    UADE_EVENT_PLAYER_NAME = 6
+    UADE_EVENT_READY = 7
+    UADE_EVENT_REQUEST_AMIGA_FILE = 8
+    UADE_EVENT_SONG_END = 9
+    UADE_EVENT_SUBSONG_INFO = 10
 
 
 class uade_event_data(Structure):
@@ -175,4 +181,131 @@ class uade_event(Structure):
     _fields_ = [
         ("type", c_int),
         ("uade_event_union", uade_event_union),
+    ]
+
+
+class uade_dir(Structure):
+    _fields_ = [
+        ("name", c_char * PATH_MAX),
+    ]
+
+
+class uade_config(Structure):
+    _fields_ = [
+        ("action_keys", c_char),
+        ("ao_options", c_char_p),
+        ("ao_options_set", c_char),
+        ("basedir", uade_dir),
+        ("basedir_set", c_char),
+        ("buffer_time", c_int),
+        ("content_detection", c_char),
+        ("cygwin_drive_workaround", c_char),
+        ("ep_options", c_char_p),
+        ("ep_options_set", c_char),
+        ("filter_type", c_char),
+        ("frequency", c_int),
+        ("led_forced", c_char),
+        ("led_state", c_char),
+        ("gain_enable", c_char),
+        ("gain", c_float),
+        ("headphones", c_char),
+        ("headphones2", c_char),
+        ("ignore_player_check", c_char),
+        ("resampler", c_char_p),
+        ("resampler_set", c_char),
+        ("no_ep_end", c_char),
+        ("no_filter", c_char),
+        ("no_postprocessing", c_char),
+        ("normalise", c_char),
+        ("normalise_parameter", c_char_p),
+        ("one_subsong", c_char),
+        ("panning", c_float),
+        ("panning_enable", c_char),
+        ("random_play", c_char),
+        ("recursive_mode", c_char),
+        ("silence_timeout", c_int),
+        ("song_title", c_char_p),
+        ("song_title_set", c_char),
+        ("speed_hack", c_char),
+        ("subsong_timeout", c_int),
+        ("timeout", c_int),
+        ("use_text_scope", c_char),
+        ("use_timeouts", c_char),
+        ("use_ntsc", c_char),
+        ("use_quad_mode", c_char),  # Added by Airmann
+        ("verbose", c_char),
+    ]
+
+
+class uade_song(Structure):
+    _fields_ = [
+        ("md5", c_char * 33),
+        ("module_filename", c_char * PATH_MAX),
+        ("playername", c_char * 256),
+        ("modulename", c_char * 256),
+        ("formatname", c_char * 256),
+        ("buf", POINTER(c_ubyte)),
+        ("bufsize", c_size_t),
+        ("min_subsong", c_int),
+        ("max_subsong", c_int),
+        ("cur_subsong", c_int),
+        ("playtime", c_int),
+        ("flags", c_int),
+        ("nsubsongs", c_int),
+        ("subsongs", POINTER(c_ubyte)),
+        ("songattributes", POINTER(uade_attribute)),
+        ("ep_options", uade_ep_options),
+        ("normalisation", c_char_p),
+        ("out_bytes", c_int64),
+        ("silence_count", c_int64),
+    ]
+
+
+class uade_effect_t(IntEnum):
+    UADE_EFFECT_ALLOW = 0
+    UADE_EFFECT_GAIN = 1
+    UADE_EFFECT_HEADPHONES = 2
+    UADE_EFFECT_HEADPHONES2 = 3
+    UADE_EFFECT_PAN = 4
+    UADE_EFFECT_NORMALISE = 5
+
+
+class uade_effect(Structure):
+    _fields_ = [
+        ("enabled", c_int),  # uade_effect_t
+        ("gain", c_int),
+        ("pan", c_int),
+        ("rate", c_int),
+    ]
+
+
+class eagleplayermap(Structure):
+    _fields_ = [
+        ("extension", c_char_p),
+        ("player", POINTER(eagleplayer)),
+    ]
+
+
+class eagleplayerstore(Structure):
+    _fields_ = [
+        ("nplayers", c_size_t),
+        ("players", POINTER(eagleplayer)),
+        ("nextensions", c_size_t),
+        ("map", POINTER(eagleplayermap)),
+    ]
+
+
+class uade_control_state(IntEnum):
+    UADE_INITIAL_STATE = 0
+    UADE_R_STATE = 1
+    UADE_S_STATE = 2
+
+
+class uade_ipc(Structure):
+    _fields_ = [
+        ("input", c_void_p),
+        ("output", c_void_p),
+        ("inputbytes", c_uint64),
+        ("inputbuffer", c_char * UADE_MAX_MESSAGE_SIZE),
+        ("state", c_int),  # uade_control_state
     ]
