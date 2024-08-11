@@ -610,6 +610,8 @@ class MainWindow(QtWidgets.QMainWindow):
         filenames = self.filenames_from_paths(filenames)
         filenames.sort(key=lambda x: x.lower())
 
+        self.enable_ui(False)
+
         self.loader_thread.filenames = filenames
         self.loader_thread.start()
         return True
@@ -1232,3 +1234,19 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         self.stop(False)
         self.play_next_item()
+
+    def enable_ui(self, enable: bool) -> None:
+        self.play_action.setEnabled(enable)
+        self.stop_action.setEnabled(enable)
+        self.prev_action.setEnabled(enable)
+        self.next_action.setEnabled(enable)
+        self.delete_action.setEnabled(enable)
+        self.lookup_msm_action.setEnabled(enable)
+        self.lookup_modland_action.setEnabled(enable)
+        self.sort_action.setEnabled(enable)
+        self.modarchive_action.setEnabled(enable)
+        self.songinfo_action.setEnabled(enable)
+
+    @QtCore.Slot()
+    def loader_finished(self):
+        self.enable_ui(True)
