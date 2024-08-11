@@ -224,37 +224,24 @@ class MainWindow(QtWidgets.QMainWindow):
         else:
             self.add_tab("Default")
 
-        # current_tab = self.playlist_tabs.widget(
-        #     int(files_config.get("current_tab", "0"))
-        # )
         current_tab_index = int(files_config.get("current_tab", "0"))
         current_item_row = int(files_config.get("current_item", "0"))
 
         if current_tab_index >= 0:
             self.playlist_tabs.setCurrentIndex(current_tab_index)
 
-        current_tab = self.get_current_tab()
+            # Set all columns widths to config values for all tabs
+            for t in range(0, self.playlist_tabs.count()):
+                current_tab = self.playlist_tabs.widget(t)
+                if isinstance(current_tab, PlaylistTreeView):
+                    for c in range(current_tab.model().columnCount()):
+                        config_value = window_config.get(f"col{str(c)}_width")
 
-        if current_tab:
-            if isinstance(current_tab, PlaylistTreeView):
-                index = current_tab.model().index(current_item_row, 0)
-                if index.isValid():
-                    current_tab.current_row = current_item_row
-                    current_tab.selectionModel().select(
-                        index,
-                        QItemSelectionModel.SelectionFlag.SelectCurrent
-                        | QItemSelectionModel.SelectionFlag.Rows,
-                    )
+                        if config_value:
+                            if config_value.isnumeric():
+                                current_tab.header().resizeSection(c, int(config_value))
 
-                # Set all columns widths to config values
-                for c, i in enumerate(range(current_tab.model().columnCount())):
-                    config_value = window_config.get(f"col{str(c)}_width")
-
-                    if config_value:
-                        if config_value.isnumeric():
-                            current_tab.header().resizeSection(c, int(config_value))
-
-                current_tab.scrollTo(index)
+            self.select_item(current_item_row, True)
 
     def write_config(self) -> None:
         window_config = self.config["window"]
@@ -483,6 +470,25 @@ class MainWindow(QtWidgets.QMainWindow):
         toolbar.addWidget(self.time)
         toolbar.addWidget(QLabel(" / "))
         toolbar.addWidget(self.time_total)
+
+    def select_item(self, row: int, scroll: bool = True) -> None:
+        current_tab = self.get_current_tab()
+
+        if current_tab:
+            model = current_tab.model()
+
+            if isinstance(model, PlaylistModel):
+                index = model.index(row, 0)
+
+                if index.isValid():
+                    current_tab.selectionModel().select(
+                        index,
+                        QItemSelectionModel.SelectionFlag.SelectCurrent
+                        | QItemSelectionModel.SelectionFlag.Rows,
+                    )
+
+                    if scroll:
+                        current_tab.scrollTo(index)
 
     def setup_menu(self) -> None:
         menu = self.menuBar()
