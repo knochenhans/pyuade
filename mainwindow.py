@@ -49,6 +49,7 @@ from playlist import (
     PlaylistTab,
     PlaylistTreeView,
 )
+from scraping import lookup_msm, scrape_modarchive, scrape_modland, scrape_msm
 from song_info_dialog import SongInfoDialog
 from uade import Song, uade
 from util import TREEVIEWCOL, path
@@ -414,7 +415,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.modarchive_action = QAction("Modarchive", self)
         self.modarchive_action.setStatusTip("Modarchive")
-        self.modarchive_action.triggered.connect(self.scrape_modarchive)
+        self.modarchive_action.triggered.connect(self.scrape_modarchive_clicked)
 
         self.songinfo_action = QAction("Show song info", self)
         self.songinfo_action.setStatusTip("Show song info")
@@ -719,266 +720,84 @@ class MainWindow(QtWidgets.QMainWindow):
                 dialog.resize(700, 300)
                 dialog.exec()
 
-    @QtCore.Slot()
-    def scrape_modarchive(self) -> None:
+    def song_from_index(self, index: QModelIndex) -> Song | None:
         current_tab = self.get_current_tab()
-        if not current_tab:
-            return
+        if current_tab:
+            model = current_tab.model()
 
-        indexes = current_tab.selectionModel().selectedRows(0)
-        license_file = Path(user_config_dir(self.appname)) / "modarchive-api.key"
+            row = index.row()
 
-        if not license_file.exists():
-            log(LOG_TYPE.ERROR, "No modarchive-api.key found in config folder!")
-            return
+            if isinstance(model, PlaylistModel):
+                song: Song = model.itemFromIndex(
+                    current_tab.model().index(row, 0)
+                ).data(Qt.ItemDataRole.UserRole)
 
-        with open(license_file, "r") as f:
-            api_key = f.read()
+                return song
+        return None
 
-        with requests.Session() as session:
+    def get_selected_songs(self) -> list[Song]:
+        songs = []
+
+        current_tab = self.get_current_tab()
+        if current_tab:
+            indexes = current_tab.selectionModel().selectedRows(0)
+
             for index in indexes:
-                row = index.row()
+                song = self.song_from_index(index)
+                if song:
+                    songs.append(song)
 
-                model = current_tab.model()
-
-                if isinstance(model, PlaylistModel):
-                    song: Song = model.itemFromIndex(
-                        current_tab.model().index(row, 0)
-                    ).data(Qt.ItemDataRole.UserRole)
-
-                    md5 = hashlib.md5()
-
-                    log(
-                        LOG_TYPE.INFO,
-                        f"Looking up {song.song_file.filename} in ModArchive.",
-                    )
-
-                    with open(song.song_file.filename, "rb") as f:
-                        data = f.read()
-
-                        if data:
-                            md5.update(data)
-
-                            md5_request = (
-                                f"request=search&type=hash&query={md5.hexdigest()}"
-                            )
-
-                            query = f"https://modarchive.org/data/xml-tools.php?key={api_key}&{md5_request}"
-
-                            response = session.get(query)
-
-                            xml_tree = ElementTree.fromstring(response.content)
-
-                            xml_module = xml_tree.find("module")
-
-                            if xml_module:
-                                if int(xml_tree.find("results").text) > 0:
-                                    log(
-                                        LOG_TYPE.SUCCESS,
-                                        f"ModArchive Metadata found for {song.song_file.filename}.",
-                                    )
-                                    xml_artist_info = xml_module.find("artist_info")
-
-                                    for artist_idx in range(
-                                        int(xml_artist_info.find("artists").text)
-                                    ):
-                                        xml_artist = xml_artist_info.find("artist")
-
-                                        song.song_file.author = xml_artist.find(
-                                            "alias"
-                                        ).text
-
-                                        log(
-                                            LOG_TYPE.INFO,
-                                            f"Artist {song.song_file.author} found for {song.song_file.filename}.",
-                                        )
-
-                                else:
-                                    log(
-                                        LOG_TYPE.WARNING,
-                                        f"More than 1 results for md5 of {song.song_file.filename} found!",
-                                    )
-
-                            else:
-                                log(
-                                    LOG_TYPE.WARNING,
-                                    f"No ModArchive results found for {song.song_file.filename}!",
-                                )
+        return songs
 
     @QtCore.Slot()
-    def scrape_modland(self, song: Song, column: str) -> str:
-        md5 = hashlib.md5()
+    def scrape_modarchive_clicked(self) -> None:
+        songs = self.get_selected_songs()
 
-        with open(song.song_file.filename, "rb") as f:
-            data = f.read()
+        updated_songs = []
 
-            if data:
-                md5.update(data)
+        if songs:
+            for song in songs:
+                updated_songs.append(scrape_modarchive(self.appname, song))
 
-                url = (
-                    "https://www.exotica.org.uk/mediawiki/index.php?title=Special%3AModland&md=qsearch&qs="
-                    + md5.hexdigest()
-                )
+    @QtCore.Slot()
+    def scrape_modland_clicked(self) -> None:
+        songs = self.get_selected_songs()
 
-                response = requests.get(url)
-                if response.status_code == 200:
-                    website = requests.get(url)
-                    results = BeautifulSoup(website.content, "html5lib")
+        updated_songs = []
 
-                    table = results.find("table", id="ml_resultstable")
-                    if table:
-                        search_results = table.find("caption")
-
-                        pattern = re.compile("^Search - ([0-9]+) result.*?$")
-                        match = pattern.match(search_results.text)
-                        if match:
-                            if int(match.group(1)) > 0:
-                                # webbrowser.open(url, new=2)
-                                table_body = table.find("tbody")
-
-                                author_col_nr = -1
-
-                                # Find out which row contains author (just to make a little more flexible)
-
-                                table_rows = table_body.find_all("tr")
-                                for table_row in table_rows:
-                                    cols = table_row.find_all("th")
-
-                                    for c, col in enumerate(cols):
-                                        header_name = col.find("a")
-
-                                        if header_name.text.strip() == column:
-                                            author_col_nr = c
-                                            break
-
-                                    if author_col_nr >= 0:
-                                        tds = table_row.find_all("td")
-
-                                        if tds:
-                                            td = tds[author_col_nr]
-                                            return td.find("a").text.strip()
-        return ""
+        if songs:
+            for song in songs:
+                updated_songs.append(scrape_modland(song, "Author"))
 
     @QtCore.Slot()
     def lookup_modland_clicked(self):
         # Experimental lookup in modland database via MSM
 
-        current_tab = self.get_current_tab()
+        # song.song_file.author = self.scrape_modland(song, "Author(s)")
+        # Get MSM data
+        songs = self.get_selected_songs()
 
-        if current_tab:
-            indexes = current_tab.selectionModel().selectedRows(0)
+        if len(songs) > 0:
+            song = songs[0]
+            data = scrape_msm(song)
 
-        for index in indexes:
+            # Check for url containing modarchive.org
+            if "urls" in data:
+                for url in data["urls"]:
+                    if "modarchive.org" in url:
+                        webbrowser.open(url, new=2)
+                        break
 
-            row = index.row()
-
-            if current_tab:
-                model = current_tab.model()
-
-                if isinstance(model, PlaylistModel):
-                    song: Song = model.itemFromIndex(model.index(row, 0)).data(
-                        Qt.ItemDataRole.UserRole
-                    )
-
-                    # song.song_file.author = self.scrape_modland(song, "Author(s)")
-                    # Get MSM data
-                    data = self.scrape_msm(song)
-
-                    # Check for url containing modarchive.org
-                    if "urls" in data:
-                        for url in data["urls"]:
-                            if "modarchive.org" in url:
-                                webbrowser.open(url, new=2)
-                                break
-
-                    # self.get_current_tab().model().itemFromIndex(self.get_current_tab().model().index(
-                    #     row, TREEVIEWCOL.AUTHOR)).setText(song.song_file.author)
+            # self.get_current_tab().model().itemFromIndex(self.get_current_tab().model().index(
+            #     row, TREEVIEWCOL.AUTHOR)).setText(song.song_file.author)
 
     @QtCore.Slot()
-    def scrape_msm(self, song: Song) -> dict:
-        # Lookup in .Mod Sample Master database via sha1 and return data
-        return_data = {}
-
-        sha1 = hashlib.sha1()
-
-        with open(song.song_file.filename, "rb") as f:
-            data = f.read()
-
-            if data:
-                sha1.update(data)
-
-                url = (
-                    "https://modsamplemaster.thegang.nu/module.php?sha1="
-                    + sha1.hexdigest()
-                )
-
-                response = requests.get(url)
-                if response.status_code == 200:
-                    website = requests.get(url)
-                    results = BeautifulSoup(website.content, "html5lib")
-
-                    page = results.find("div", class_="page")
-                    if page:
-                        # Check if we have a result
-                        name = page.find("h1")
-
-                        if name.text:
-                            return_data["name"] = name.text
-
-                            # Find h1 "Links"
-                            links = page.find("h1", string="Links")
-                            details = links.find_next_sibling("div")
-
-                            if details:
-                                # Read all list items
-                                list_items = details.find_all("li")
-
-                                urls = []
-
-                                # Loop through all list items and add them to the return_data
-                                for item in list_items:
-                                    urls.append(item.text)
-
-                                return_data["urls"] = urls
-
-        return return_data
-
-    @QtCore.Slot()
-    def lookup_msm_clicked(self):
+    def lookup_msm_clicked(self) -> None:
         # Experimental lookup in .Mod Sample Master database
-        row = self.get_current_tab().selectedIndexes()[0].row()
+        url = lookup_msm(self.get_selected_songs()[0])
 
-        song: Song = (
-            self.get_current_tab()
-            .model()
-            .itemFromIndex(self.get_current_tab().model().index(row, 0))
-            .data(Qt.ItemDataRole.UserRole)
-        )
-
-        sha1 = hashlib.sha1()
-
-        with open(song.song_file.filename, "rb") as f:
-            data = f.read()
-
-            if data:
-                sha1.update(data)
-
-                url = (
-                    "https://modsamplemaster.thegang.nu/module.php?sha1="
-                    + sha1.hexdigest()
-                )
-
-                response = requests.get(url)
-                if response.status_code == 200:
-                    website = requests.get(url)
-                    results = BeautifulSoup(website.content, "html5lib")
-
-                    page = results.find("div", class_="page")
-                    if page:
-                        name = page.find("h1")
-
-                        if name.text:
-                            webbrowser.open(url, new=2)
+        if url:
+            webbrowser.open(url, new=2)
 
     @QtCore.Slot()
     def quit_clicked(self):
