@@ -304,16 +304,20 @@ class MainWindow(QtWidgets.QMainWindow):
         tab = self.playlist_tabs.widget(tab_nr)
         tab_name = "Unnamed Tab"
 
-        if isinstance(tab, PlaylistTreeView):
-            for row in range(tab.model().rowCount()):
-                song: Song = (
-                    tab.model()
-                    .itemFromIndex(tab.model().index(row, 0))
-                    .data(Qt.ItemDataRole.UserRole)
-                )
+        current_tab = self.get_current_tab()
 
-                songs.append(song)
-            tab_name = self.playlist_tabs.tabBar().tabText(tab_nr)
+        if current_tab:
+            model = current_tab.model()
+
+            if isinstance(model, PlaylistModel):
+                if isinstance(tab, PlaylistTreeView):
+                    for row in range(model.rowCount()):
+                        song: Song = model.itemFromIndex(model.index(row, 0)).data(
+                            Qt.ItemDataRole.UserRole
+                        )
+
+                        songs.append(song)
+                    tab_name = self.playlist_tabs.tabBar().tabText(tab_nr)
         return PlaylistExport(tab_name, songs)
 
     def write_playlist_file(self, tab_nr: int) -> None:
@@ -687,16 +691,17 @@ class MainWindow(QtWidgets.QMainWindow):
 
             row = index.row()
 
-            song: Song = (
-                current_tab.model()
-                .itemFromIndex(current_tab.model().index(row, 0))
-                .data(Qt.ItemDataRole.UserRole)
-            )
+            model = current_tab.model()
 
-            dialog = SongInfoDialog(song)
-            dialog.setWindowTitle(f"Song info for {song.song_file.filename}")
-            dialog.resize(700, 300)
-            dialog.exec()
+            if isinstance(model, PlaylistModel):
+                song: Song = model.itemFromIndex(
+                    current_tab.model().index(row, 0)
+                ).data(Qt.ItemDataRole.UserRole)
+
+                dialog = SongInfoDialog(song)
+                dialog.setWindowTitle(f"Song info for {song.song_file.filename}")
+                dialog.resize(700, 300)
+                dialog.exec()
 
     @QtCore.Slot()
     def scrape_modarchive(self) -> None:
@@ -717,70 +722,72 @@ class MainWindow(QtWidgets.QMainWindow):
         with requests.Session() as session:
             for index in indexes:
                 row = index.row()
-                song: Song = (
-                    current_tab.model()
-                    .itemFromIndex(current_tab.model().index(row, 0))
-                    .data(Qt.ItemDataRole.UserRole)
-                )
 
-                md5 = hashlib.md5()
+                model = current_tab.model()
 
-                log(
-                    LOG_TYPE.INFO,
-                    f"Looking up {song.song_file.filename} in ModArchive.",
-                )
+                if isinstance(model, PlaylistModel):
+                    song: Song = model.itemFromIndex(
+                        current_tab.model().index(row, 0)
+                    ).data(Qt.ItemDataRole.UserRole)
 
-                with open(song.song_file.filename, "rb") as f:
-                    data = f.read()
+                    md5 = hashlib.md5()
 
-                    if data:
-                        md5.update(data)
+                    log(
+                        LOG_TYPE.INFO,
+                        f"Looking up {song.song_file.filename} in ModArchive.",
+                    )
 
-                        md5_request = (
-                            f"request=search&type=hash&query={md5.hexdigest()}"
-                        )
+                    with open(song.song_file.filename, "rb") as f:
+                        data = f.read()
 
-                        query = f"https://modarchive.org/data/xml-tools.php?key={api_key}&{md5_request}"
+                        if data:
+                            md5.update(data)
 
-                        response = session.get(query)
+                            md5_request = (
+                                f"request=search&type=hash&query={md5.hexdigest()}"
+                            )
 
-                        xml_tree = ElementTree.fromstring(response.content)
+                            query = f"https://modarchive.org/data/xml-tools.php?key={api_key}&{md5_request}"
 
-                        xml_module = xml_tree.find("module")
+                            response = session.get(query)
 
-                        if xml_module:
-                            if int(xml_tree.find("results").text) > 0:
-                                log(
-                                    LOG_TYPE.SUCCESS,
-                                    f"ModArchive Metadata found for {song.song_file.filename}.",
-                                )
-                                xml_artist_info = xml_module.find("artist_info")
+                            xml_tree = ElementTree.fromstring(response.content)
 
-                                for artist_idx in range(
-                                    int(xml_artist_info.find("artists").text)
-                                ):
-                                    xml_artist = xml_artist_info.find("artist")
+                            xml_module = xml_tree.find("module")
 
-                                    song.song_file.author = xml_artist.find(
-                                        "alias"
-                                    ).text
-
+                            if xml_module:
+                                if int(xml_tree.find("results").text) > 0:
                                     log(
-                                        LOG_TYPE.INFO,
-                                        f"Artist {song.song_file.author} found for {song.song_file.filename}.",
+                                        LOG_TYPE.SUCCESS,
+                                        f"ModArchive Metadata found for {song.song_file.filename}.",
+                                    )
+                                    xml_artist_info = xml_module.find("artist_info")
+
+                                    for artist_idx in range(
+                                        int(xml_artist_info.find("artists").text)
+                                    ):
+                                        xml_artist = xml_artist_info.find("artist")
+
+                                        song.song_file.author = xml_artist.find(
+                                            "alias"
+                                        ).text
+
+                                        log(
+                                            LOG_TYPE.INFO,
+                                            f"Artist {song.song_file.author} found for {song.song_file.filename}.",
+                                        )
+
+                                else:
+                                    log(
+                                        LOG_TYPE.WARNING,
+                                        f"More than 1 results for md5 of {song.song_file.filename} found!",
                                     )
 
                             else:
                                 log(
                                     LOG_TYPE.WARNING,
-                                    f"More than 1 results for md5 of {song.song_file.filename} found!",
+                                    f"No ModArchive results found for {song.song_file.filename}!",
                                 )
-
-                        else:
-                            log(
-                                LOG_TYPE.WARNING,
-                                f"No ModArchive results found for {song.song_file.filename}!",
-                            )
 
     @QtCore.Slot()
     def scrape_modland(self, song: Song, column: str) -> str:
@@ -840,32 +847,36 @@ class MainWindow(QtWidgets.QMainWindow):
     def lookup_modland_clicked(self):
         # Experimental lookup in modland database via MSM
 
-        indexes = self.get_current_tab().selectionModel().selectedRows(0)
+        current_tab = self.get_current_tab()
+
+        if current_tab:
+            indexes = current_tab.selectionModel().selectedRows(0)
 
         for index in indexes:
 
             row = index.row()
 
-            song: Song = (
-                self.get_current_tab()
-                .model()
-                .itemFromIndex(self.get_current_tab().model().index(row, 0))
-                .data(Qt.ItemDataRole.UserRole)
-            )
+            if current_tab:
+                model = current_tab.model()
 
-            # song.song_file.author = self.scrape_modland(song, "Author(s)")
-            # Get MSM data
-            data = self.scrape_msm(song)
+                if isinstance(model, PlaylistModel):
+                    song: Song = model.itemFromIndex(model.index(row, 0)).data(
+                        Qt.ItemDataRole.UserRole
+                    )
 
-            # Check for url containing modarchive.org
-            if "urls" in data:
-                for url in data["urls"]:
-                    if "modarchive.org" in url:
-                        webbrowser.open(url, new=2)
-                        break
+                    # song.song_file.author = self.scrape_modland(song, "Author(s)")
+                    # Get MSM data
+                    data = self.scrape_msm(song)
 
-            # self.get_current_tab().model().itemFromIndex(self.get_current_tab().model().index(
-            #     row, TREEVIEWCOL.AUTHOR)).setText(song.song_file.author)
+                    # Check for url containing modarchive.org
+                    if "urls" in data:
+                        for url in data["urls"]:
+                            if "modarchive.org" in url:
+                                webbrowser.open(url, new=2)
+                                break
+
+                    # self.get_current_tab().model().itemFromIndex(self.get_current_tab().model().index(
+                    #     row, TREEVIEWCOL.AUTHOR)).setText(song.song_file.author)
 
     @QtCore.Slot()
     def scrape_msm(self, song: Song) -> dict:
@@ -1003,67 +1014,70 @@ class MainWindow(QtWidgets.QMainWindow):
         if not current_tab:
             return
 
-        # Get song from user data in column
-        song: Song = (
-            current_tab.model()
-            .itemFromIndex(current_tab.model().index(row, 0))
-            .data(Qt.ItemDataRole.UserRole)
-        )
+        model = current_tab.model()
 
-        # Stop the player if it's already playing
-        if not continue_:
-            if self.player_thread.status in (
-                PLAYERTHREADSTATUS.PLAYING,
-                PLAYERTHREADSTATUS.PAUSED,
-            ):
-                self.stop(False)
-
-            self.play_file_thread(song)
-            current_tab.current_row = row
-
-            # Select playing track
-            current_tab.selectionModel().select(
-                current_tab.model().index(current_tab.current_row, 0),
-                QItemSelectionModel.SelectionFlag.SelectCurrent
-                | QItemSelectionModel.SelectionFlag.Rows,
+        if isinstance(model, PlaylistModel):
+            # Get song from user data in column
+            song: Song = model.itemFromIndex(current_tab.model().index(row, 0)).data(
+                Qt.ItemDataRole.UserRole
             )
 
-            # bytes = 0
+            # Stop the player if it's already playing
+            if not continue_:
+                if self.player_thread.status in (
+                    PLAYERTHREADSTATUS.PLAYING,
+                    PLAYERTHREADSTATUS.PAUSED,
+                ):
+                    self.stop(False)
 
-            # if hasattr(song, 'subsong'):
-            #     bytes = song.subsong.bytes
-            # else:
-            #     bytes = song.song_file.modulebytes
+                self.play_file_thread(song)
+                current_tab.current_row = row
 
-            # Set timeline and duration
-            self.timeline.setMaximum(int(song.song_file.duration * 100))
-            self.time_total.setText(
-                str(datetime.timedelta(seconds=song.song_file.duration)).split(".")[0]
+                # Select playing track
+                current_tab.selectionModel().select(
+                    current_tab.model().index(current_tab.current_row, 0),
+                    QItemSelectionModel.SelectionFlag.SelectCurrent
+                    | QItemSelectionModel.SelectionFlag.Rows,
+                )
+
+                # bytes = 0
+
+                # if hasattr(song, 'subsong'):
+                #     bytes = song.subsong.bytes
+                # else:
+                #     bytes = song.song_file.modulebytes
+
+                # Set timeline and duration
+                self.timeline.setMaximum(int(song.song_file.duration * 100))
+                self.time_total.setText(
+                    str(datetime.timedelta(seconds=song.song_file.duration)).split(".")[
+                        0
+                    ]
+                )
+
+                # Set current song (for pausing)
+                # self.current_selection.setCurrentIndex(current_tab.model().index(current_tab.current_row, 0), QItemSelectionModel.SelectCurrent)
+                self.player_thread.current_song = song
+
+                # Show notification
+                self.show_song_notification(song)
+
+                log(LOG_TYPE.INFO, f"Now playing {song.song_file.filename}")
+                self.current_row = row
+
+                # Update UI
+                self.tray.setToolTip(f"Playing {song.song_file.filename}")
+            else:
+                pass
+
+            self.play_action.setIcon(QIcon(os.path.join(path, "pause.png")))
+            self.load_action.setEnabled(False)
+            self.setWindowTitle(
+                f"pyuade - {song.song_file.modulename} - {song.song_file.filename}"
             )
 
-            # Set current song (for pausing)
-            # self.current_selection.setCurrentIndex(current_tab.model().index(current_tab.current_row, 0), QItemSelectionModel.SelectCurrent)
-            self.player_thread.current_song = song
-
-            # Show notification
-            self.show_song_notification(song)
-
-            log(LOG_TYPE.INFO, f"Now playing {song.song_file.filename}")
-            self.current_row = row
-
-            # Update UI
-            self.tray.setToolTip(f"Playing {song.song_file.filename}")
-        else:
-            pass
-
-        self.play_action.setIcon(QIcon(os.path.join(path, "pause.png")))
-        self.load_action.setEnabled(False)
-        self.setWindowTitle(
-            f"pyuade - {song.song_file.modulename} - {song.song_file.filename}"
-        )
-
-        self.set_play_status(row, True)
-        self.player_thread.status = PLAYERTHREADSTATUS.PLAYING
+            self.set_play_status(row, True)
+            self.player_thread.status = PLAYERTHREADSTATUS.PLAYING
 
     def play_file_thread(self, song: Song) -> None:
         self.player_thread.current_song = song
