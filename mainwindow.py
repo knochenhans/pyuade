@@ -252,6 +252,8 @@ class MainWindow(QtWidgets.QMainWindow):
                     c, int(window_config.get(f"col{str(c)}_width", "100"))
                 )
 
+            current_tab.scrollTo(index)
+
     def write_config(self) -> None:
         window_config = self.config["window"]
         files_config = self.config["files"]
