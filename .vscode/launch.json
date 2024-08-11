@@ -6,14 +6,15 @@
     "configurations": [
         {
             "name": "pyuade",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "program": "pyuade.py",
-            "console": "integratedTerminal"
+            "console": "integratedTerminal",
+            "justMyCode": false
         },
         {
             "name": "Python: Aktuelle Datei",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal",
