@@ -192,7 +192,14 @@ class MainWindow(QtWidgets.QMainWindow):
         else:
             self.add_tab('Default')
 
-        current_item_row = int(files_config.get('current_item', '0'))
+        # current_tab = self.playlist_tabs.widget(
+        #     int(files_config.get("current_tab", "0"))
+        # )
+        current_tab_index = int(files_config.get("current_tab", "0"))
+        current_item_row = int(files_config.get("current_item", "0"))
+
+        if current_tab_index >= 0:
+            self.playlist_tabs.setCurrentIndex(current_tab_index)
 
         current_tab = self.get_current_tab()
 
@@ -224,7 +231,9 @@ class MainWindow(QtWidgets.QMainWindow):
         current_tab = self.get_current_tab()
         if current_tab:
             if current_tab.current_row >= 0:
-                files_config['current_item'] = str(current_tab.current_row)
+                # Save current tab and row
+                files_config["current_tab"] = str(self.playlist_tabs.currentIndex())
+                files_config["current_item"] = str(current_tab.current_row)
 
             # Column width
 
