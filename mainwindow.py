@@ -12,6 +12,7 @@ from typing import Optional
 from xml.etree import ElementTree
 
 import jsonpickle
+import psutil
 import requests
 from appdirs import user_config_dir
 from bs4 import BeautifulSoup
@@ -111,6 +112,8 @@ class MainWindow(QtWidgets.QMainWindow):
     def __init__(self) -> None:
         super().__init__()
 
+        psutil.Process().nice(0)
+
         self.setup_gui()
 
         self.current_tab = 0
@@ -118,6 +121,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.player_thread = PlayerThread(self)
         self.loader_thread = LoaderThread(self)
+        self.loader_thread.finished.connect(self.loader_finished)
 
         uade.song_end.connect(self.item_finished)
         uade.current_seconds_update.connect(self.timeline_update_seconds)
