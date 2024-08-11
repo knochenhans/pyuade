@@ -5,7 +5,7 @@ import sys
 from PySide6 import QtCore
 
 from uade import Song, uade
-from .utils.log import log, LOG_TYPE 
+from utils.log import log, LOG_TYPE 
 
 
 class PLAYERTHREADSTATUS(IntEnum):

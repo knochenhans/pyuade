@@ -32,7 +32,8 @@ from playlist import (PlaylistExport, PlaylistItem, PlaylistModel, PlaylistTab,
 from song_info_dialog import SongInfoDialog
 from uade import Song, uade
 from util import TREEVIEWCOL, path
-from .utils.log import log, LOG_TYPE
+
+from utils.log import LOG_TYPE, log
 
 
 class OptionsGeneral(QtWidgets.QWidget):
