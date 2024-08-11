@@ -1,11 +1,27 @@
+from ctypes import c_char, c_size_t, c_ubyte, c_void_p, byref
 import pyaudio
 from PySide6 import QtCore
 from PySide6.QtCore import QObject, Signal
+from ctypes_functions import libuade
 
-from ctypes_functions import *
-from .utils.log import log, LOG_TYPE 
+from ctypes_classes import (
+    UADE_MAX_MESSAGE_SIZE,
+    UADE_NOTIFICATION_TYPE,
+    UADE_SEEK_MODE,
+    uade_event,
+    uade_event_data,
+    uade_event_songend,
+    uade_event_union,
+    uade_notification,
+    uade_notification_song_end,
+    uade_notification_union,
+    uade_song_info,
+    uade_subsong_info,
+)
+from utils.log import LOG_TYPE, log
 
-class SubsongData():
+
+class SubsongData:
     def __init__(self) -> None:
         self.cur: int = 0
         self.min: int = 0
@@ -15,7 +31,8 @@ class SubsongData():
 
 # Unique reference to the actual module file, filled by data from UADE
 
-class SongFile():
+
+class SongFile:
     def __init__(self) -> None:
         self.formatname: str = ""
         self.modulebytes: int = 0
@@ -38,7 +55,8 @@ class SongFile():
 
 # Subsong of a song in the playlist
 
-class Subsong():
+
+class Subsong:
     def __init__(self) -> None:
         self.nr: int = 0
         self.bytes: int = 0
@@ -46,7 +64,8 @@ class Subsong():
 
 # Represents a specific subsong of a song as playable in the playlist
 
-class Song():
+
+class Song:
     def __init__(self) -> None:
         self.song_file: SongFile
         self.subsong: Subsong
@@ -66,6 +85,7 @@ class Uade(QObject):
     def __init__(self):
         super().__init__()
         self.pyaudio = pyaudio.PyAudio()
+        self.stream = None
 
     def __del__(self):
         self.pyaudio.terminate()
@@ -76,7 +96,8 @@ class Uade(QObject):
         charbytes256 = (c_char * 256)()
 
         event_songend = uade_event_songend(
-            happy=0, stopnow=0, tailbytes=0, reason=bytes(charbytes256))
+            happy=0, stopnow=0, tailbytes=0, reason=bytes(charbytes256)
+        )
 
         a = (c_ubyte * UADE_MAX_MESSAGE_SIZE)()
 
@@ -88,14 +109,18 @@ class Uade(QObject):
 
         charbytes1024 = (c_char * 1024)()
 
-        event_union = uade_event_union(data=event_data, msg=bytes(
-            charbytes1024), songend=event_songend, subsongs=si)
+        event_union = uade_event_union(
+            data=event_data,
+            msg=bytes(charbytes1024),
+            songend=event_songend,
+            subsongs=si,
+        )
 
         event: uade_event = uade_event(type=0, uade_event_union=event_union)
 
         e: int = libuade.uade_get_event(byref(event), state)
 
-        log(LOG_TYPE.INFO, f'event type: {event.type}')
+        log(LOG_TYPE.INFO, f"event type: {event.type}")
 
         return event
 
@@ -107,13 +132,20 @@ class Uade(QObject):
     #         print("Seeking failed")
 
     def seek_seconds(self, seconds: float) -> None:
-        songinfo: uade_song_info = libuade.uade_get_song_info(
-            self.state).contents
+        songinfo: uade_song_info = libuade.uade_get_song_info(self.state).contents
 
-        if libuade.uade_seek(UADE_SEEK_MODE.UADE_SEEK_SUBSONG_RELATIVE, seconds, songinfo.subsongs.cur, self.state) != 0:
-            log(LOG_TYPE.ERROR, 'Seeking failed')
+        if (
+            libuade.uade_seek(
+                UADE_SEEK_MODE.UADE_SEEK_SUBSONG_RELATIVE,
+                seconds,
+                songinfo.subsongs.cur,
+                self.state,
+            )
+            != 0
+        ):
+            log(LOG_TYPE.ERROR, "Seeking failed")
 
-    @ QtCore.Slot()
+    @QtCore.Slot()
     def position_changed(self, seconds: float):
         self.seek_seconds(seconds)
 
@@ -125,17 +157,17 @@ class Uade(QObject):
         ret = libuade.uade_read_file(byref(size), str.encode(song_file.filename))
 
         if not ret:
-            raise ValueError(f'Can not read file')
+            raise ValueError(f"Can not read file")
 
         subsong = Subsong()
 
         match libuade.uade_play(str.encode(song_file.filename), subsong_nr, self.state):
             case -1:
                 # Fatal error
-                raise RuntimeError(f'Fatal error')
+                raise RuntimeError(f"Fatal error")
             case 0:
                 # Not playable
-                raise ValueError(f'Not playable')
+                raise ValueError(f"Not playable")
             case 1:
                 nbytes = 1
 
@@ -153,9 +185,9 @@ class Uade(QObject):
                     nbytes = libuade.uade_read(self.buf, self.buf_len, self.state)
 
                     if nbytes < 0:
-                        raise RuntimeError('Playback error.')
+                        raise RuntimeError("Playback error.")
                     elif nbytes == 0:
-                        raise EOFError('Song end.')
+                        raise EOFError("Song end.")
 
                     # self.check_notifications()
                     # event = self.get_event(self.state)
@@ -185,7 +217,7 @@ class Uade(QObject):
         ret = libuade.uade_read_file(byref(size), str.encode(filename))
 
         if not ret:
-            raise ValueError(f'Can not read file {filename}')
+            raise ValueError(f"Can not read file {filename}")
 
         song_file = SongFile()
 
@@ -200,24 +232,19 @@ class Uade(QObject):
                 raise Exception
             case 1:
                 songinfo: uade_song_info = libuade.uade_get_song_info(
-                    self.state).contents
+                    self.state
+                ).contents
 
                 self.check_notifications()
                 self.get_event(self.state)
 
                 song_file.filename = filename
-                song_file.modulemd5 = songinfo.modulemd5.decode(
-                    encoding='latin-1')
-                song_file.formatname = songinfo.formatname.decode(
-                    encoding='latin-1')
-                song_file.modulename = songinfo.modulename.decode(
-                    encoding='latin-1')
-                song_file.modulefname = songinfo.modulefname.decode(
-                    encoding='latin-1')
-                song_file.playername = songinfo.playername.decode(
-                    encoding='latin-1')
-                song_file.playerfname = songinfo.playerfname.decode(
-                    encoding='latin-1')
+                song_file.modulemd5 = songinfo.modulemd5.decode(encoding="latin-1")
+                song_file.formatname = songinfo.formatname.decode(encoding="latin-1")
+                song_file.modulename = songinfo.modulename.decode(encoding="latin-1")
+                song_file.modulefname = songinfo.modulefname.decode(encoding="latin-1")
+                song_file.playername = songinfo.playername.decode(encoding="latin-1")
+                song_file.playerfname = songinfo.playerfname.decode(encoding="latin-1")
                 song_file.modulebytes = songinfo.modulebytes
                 song_file.duration = songinfo.duration
 
@@ -233,7 +260,8 @@ class Uade(QObject):
                         song_file.content = False
 
                     song_file.ext = songinfo.detectioninfo.ext.decode(
-                        encoding='latin-1')
+                        encoding="latin-1"
+                    )
 
                 # Scan subsongs
 
@@ -246,7 +274,7 @@ class Uade(QObject):
         return song_file
 
     def split_subsongs(self, song_file: SongFile) -> list[Song]:
-        #libuade.uade_cleanup_state(self.state)
+        # libuade.uade_cleanup_state(self.state)
 
         songs: list[Song] = []
 
@@ -275,7 +303,10 @@ class Uade(QObject):
                     if s:
                         subsong.subsong = s
                 except:
-                    log(LOG_TYPE.ERROR, f'Playback error while scanning, discarding song: {song_file.filename}')
+                    log(
+                        LOG_TYPE.ERROR,
+                        f"Playback error while scanning, discarding song: {song_file.filename}",
+                    )
 
                 songs.append(subsong)
 
@@ -296,14 +327,16 @@ class Uade(QObject):
         ret = libuade.uade_read_file(byref(size), str.encode(song.song_file.filename))
 
         if not ret:
-            raise ValueError(f'Can not read file {song.song_file.filename}')
+            raise ValueError(f"Can not read file {song.song_file.filename}")
 
         subsong_nr = -1
 
-        if hasattr(song, 'subsong'):
+        if hasattr(song, "subsong"):
             subsong_nr = song.subsong.nr
 
-        match libuade.uade_play(str.encode(song.song_file.filename), subsong_nr, self.state):
+        match libuade.uade_play(
+            str.encode(song.song_file.filename), subsong_nr, self.state
+        ):
             case -1:
                 # Fatal error
                 libuade.uade_cleanup_state(self.state)
@@ -312,13 +345,19 @@ class Uade(QObject):
                 # Not playable
                 raise ValueError
             case 1:
-                self.stream = self.pyaudio.open(format=self.pyaudio.get_format_from_width(2), channels=2, rate=samplerate, output=True)
+                self.stream = self.pyaudio.open(
+                    format=self.pyaudio.get_format_from_width(2),
+                    channels=2,
+                    rate=samplerate,
+                    output=True,
+                )
 
     # Check notifications, return False when song end found
 
     def check_notifications(self) -> bool:
         notification_song_end = uade_notification_song_end(
-            happy=0, stopnow=0, subsong=0, subsongbytes=0, reason=None)
+            happy=0, stopnow=0, subsong=0, subsongbytes=0, reason=None
+        )
 
         # msg = (c_char * 16384)()
 
@@ -326,35 +365,53 @@ class Uade(QObject):
         #     msg=bytes(msg), song_end=notification_song_end)
 
         notification_union = uade_notification_union(
-            msg=None, song_end=notification_song_end)
+            msg=None, song_end=notification_song_end
+        )
 
         notification = uade_notification(
-            type=0, uade_notification_union=notification_union)
+            type=0, uade_notification_union=notification_union
+        )
 
         if libuade.uade_read_notification(notification, self.state) == 1:
             if notification.type == UADE_NOTIFICATION_TYPE.UADE_NOTIFICATION_MESSAGE:
                 if notification_union.msg:
-                    log(LOG_TYPE.INFO, "Amiga message: " + notification_union.msg.decode())
+                    log(
+                        LOG_TYPE.INFO,
+                        "Amiga message: " + notification_union.msg.decode(),
+                    )
             elif notification.type == UADE_NOTIFICATION_TYPE.UADE_NOTIFICATION_SONG_END:
                 # self.song_end.emit()
 
                 if notification_song_end.happy != 0:
-                    log(LOG_TYPE.INFO, "song_end.happy: " + str(notification_song_end.happy))
+                    log(
+                        LOG_TYPE.INFO,
+                        "song_end.happy: " + str(notification_song_end.happy),
+                    )
 
                 if notification_song_end.stopnow != 0:
-                    log(LOG_TYPE.INFO, "song_end.stopnow: " +
-                          str(notification_song_end.stopnow))
+                    log(
+                        LOG_TYPE.INFO,
+                        "song_end.stopnow: " + str(notification_song_end.stopnow),
+                    )
 
                 if notification_song_end.subsong != 0:
-                    log(LOG_TYPE.INFO, "song_end.subsong: " +
-                          str(notification_song_end.subsong))
+                    log(
+                        LOG_TYPE.INFO,
+                        "song_end.subsong: " + str(notification_song_end.subsong),
+                    )
 
                 if notification_song_end.subsongbytes != 0:
-                    log(LOG_TYPE.INFO, "song_end.subsongbytes: " +
-                          str(notification_song_end.subsongbytes))
+                    log(
+                        LOG_TYPE.INFO,
+                        "song_end.subsongbytes: "
+                        + str(notification_song_end.subsongbytes),
+                    )
 
                 if notification_song_end.reason:
-                    log(LOG_TYPE.INFO, "song_end.reason: " + notification_song_end.reason)
+                    log(
+                        LOG_TYPE.INFO,
+                        "song_end.reason: " + notification_song_end.reason,
+                    )
 
                 return False
             else:
@@ -371,8 +428,7 @@ class Uade(QObject):
         return int(bytes / 4)
 
     def play_threaded(self) -> bool:
-        songinfo: uade_song_info = libuade.uade_get_song_info(
-            self.state).contents
+        songinfo: uade_song_info = libuade.uade_get_song_info(self.state).contents
 
         if libuade.uade_is_seeking(self.state) == 1:
             log(LOG_TYPE.INFO, "Currently seeking...")
@@ -380,12 +436,12 @@ class Uade(QObject):
         nbytes = libuade.uade_read(self.buf, self.buf_len, self.state)
 
         if nbytes < 0:
-            raise RuntimeError('Playback error.')
+            raise RuntimeError("Playback error.")
         elif nbytes == 0:
             self.song_end.emit()
-            raise EOFError('Song end.')
+            raise EOFError("Song end.")
 
-        self.current_seconds_update.emit(songinfo.subsongbytes/176400)
+        self.current_seconds_update.emit(songinfo.subsongbytes / 176400)
         if self.check_notifications():
 
             # pa = cast(buf, POINTER(c_char * buf_len))
@@ -398,13 +454,14 @@ class Uade(QObject):
                 # raise EOFError("Song end")
                 return False
             # else:
-                # total = np.append(total, a)
+            # total = np.append(total, a)
 
-                # Only for RMC songs
-                # print(libuade.uade_get_time_position(1, self.state))
+            # Only for RMC songs
+            # print(libuade.uade_get_time_position(1, self.state))
 
             try:
-                self.stream.write(frames=self.buf.raw)
+                if self.stream:
+                    self.stream.write(frames=self.buf.raw)
             except:
                 return False
 
@@ -450,8 +507,9 @@ class Uade(QObject):
 
         libuade.uade_cleanup_state(self.state)
 
-        self.stream.stop_stream()
-        self.stream.close()
+        if self.stream:
+            self.stream.stop_stream()
+            self.stream.close()
 
         self.state = 0
 
