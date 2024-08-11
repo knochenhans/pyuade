@@ -236,23 +236,25 @@ class MainWindow(QtWidgets.QMainWindow):
         current_tab = self.get_current_tab()
 
         if current_tab:
-            index = current_tab.model().index(current_item_row, 0)
-            if index.isValid():
-                current_tab.current_row = current_item_row
-                current_tab.selectionModel().select(
-                    index,
-                    QItemSelectionModel.SelectionFlag.SelectCurrent
-                    | QItemSelectionModel.SelectionFlag.Rows,
-                )
+            if isinstance(current_tab, PlaylistTreeView):
+                index = current_tab.model().index(current_item_row, 0)
+                if index.isValid():
+                    current_tab.current_row = current_item_row
+                    current_tab.selectionModel().select(
+                        index,
+                        QItemSelectionModel.SelectionFlag.SelectCurrent
+                        | QItemSelectionModel.SelectionFlag.Rows,
+                    )
 
-            # Load column width values
+                # Set all columns widths to config values
+                for c, i in enumerate(range(current_tab.model().columnCount())):
+                    config_value = window_config.get(f"col{str(c)}_width")
 
-            for c in range(current_tab.model().columnCount()):
-                current_tab.header().resizeSection(
-                    c, int(window_config.get(f"col{str(c)}_width", "100"))
-                )
+                    if config_value:
+                        if config_value.isnumeric():
+                            current_tab.header().resizeSection(c, int(config_value))
 
-            current_tab.scrollTo(index)
+                current_tab.scrollTo(index)
 
     def write_config(self) -> None:
         window_config = self.config["window"]
@@ -276,7 +278,6 @@ class MainWindow(QtWidgets.QMainWindow):
                 files_config["current_item"] = str(current_tab.current_row)
 
             # Column width
-
             for c in range(current_tab.model().columnCount()):
                 window_config[f"col{str(c)}_width"] = str(current_tab.columnWidth(c))
 
