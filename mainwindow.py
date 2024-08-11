@@ -569,7 +569,10 @@ class MainWindow(QtWidgets.QMainWindow):
             tab = self.get_current_tab()
 
         if tab:
-            tab.model().appendRow(tree_cols)
+            model = tab.model()
+
+            if isinstance(model, PlaylistModel):
+                model.appendRow(tree_cols)
 
     def load_file(self, filename: str) -> None:
         try:
