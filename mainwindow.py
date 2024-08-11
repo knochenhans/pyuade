@@ -524,13 +524,18 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def set_play_status(self, row: int, enable: bool) -> None:
         current_tab = self.get_current_tab()
-        if current_tab:
-            col = current_tab.model().itemFromIndex(current_tab.model().index(row, 0))
 
-            if enable:
-                col.setData(self.play_icon, Qt.ItemDataRole.DecorationRole)
-            else:
-                col.setData(QIcon(), Qt.ItemDataRole.DecorationRole)
+        if current_tab:
+            model = current_tab.model()
+
+            if isinstance(model, PlaylistModel):
+                if current_tab:
+                    col = model.itemFromIndex(current_tab.model().index(row, 0))
+
+                    if enable:
+                        col.setData(self.play_icon, Qt.ItemDataRole.DecorationRole)
+                    else:
+                        col.setData(QIcon(), Qt.ItemDataRole.DecorationRole)
 
     def load_song(self, song: Song, tab=None) -> None:
         # Add subsong to playlist
@@ -653,7 +658,9 @@ class MainWindow(QtWidgets.QMainWindow):
 
         current_tab = self.get_current_tab()
         if current_tab:
-            menu.exec(current_tab.viewport().mapToGlobal(position))
+            menu.exec(
+                current_tab.viewport().mapToGlobal(QtCore.QPoint(position, position))
+            )
 
     def delete_selected_items(self):
         current_tab = self.get_current_tab()
