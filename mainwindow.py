@@ -27,7 +27,7 @@ from PySide6.QtCore import (
     QSize,
     Qt,
 )
-from PySide6.QtGui import QAction, QIcon, QIntValidator, QKeySequence
+from PySide6.QtGui import QAction, QIcon, QIntValidator, QKeySequence, QKeyEvent
 from PySide6.QtWidgets import (
     QFileDialog,
     QLabel,
@@ -668,7 +668,7 @@ class MainWindow(QtWidgets.QMainWindow):
             for row in rows_to_remove:
                 current_tab.model().removeRows(row, 1, QModelIndex())
 
-    def keyPressEvent(self, event: QEvent):
+    def keyPressEvent(self, event: QKeyEvent):
         current_tab = self.get_current_tab()
         if current_tab:
             if current_tab.selectionModel().selectedRows(0):
