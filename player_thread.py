@@ -9,8 +9,8 @@ from utils.log import log, LOG_TYPE
 
 
 class PLAYERTHREADSTATUS(IntEnum):
-    PLAYING = 0,
-    PAUSED = 1,
+    PLAYING = 0
+    PAUSED = 1
     STOPPED = 2
 
 

@@ -1,21 +1,16 @@
 import configparser
 import datetime
 import glob
-import hashlib
 import ntpath
 import os
-import re
 import resource
 import webbrowser
 from pathlib import Path
 from typing import Optional
-from xml.etree import ElementTree
 
 import jsonpickle
 import psutil
-import requests
 from appdirs import user_config_dir
-from bs4 import BeautifulSoup
 from pynotifier import Notification, NotificationClient
 from pynotifier.backends import platform
 from PySide6 import QtCore, QtWidgets
@@ -97,7 +92,8 @@ class Options(QtWidgets.QDialog):
         self.layout().addWidget(self.tab_widget)
 
         self.buttons = QtWidgets.QDialogButtonBox(
-            QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel
+            QtWidgets.QDialogButtonBox.StandardButton.Ok
+            | QtWidgets.QDialogButtonBox.StandardButton.Cancel
         )
         self.buttons.accepted.connect(self.accept)
         self.buttons.rejected.connect(self.reject)
@@ -133,7 +129,14 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.read_config()
 
-        self.current_selection = self.get_current_tab().selectionModel()
+        current_tab = self.get_current_tab()
+        self.current_selection: Optional[QItemSelectionModel] = None
+
+        if current_tab:
+            self.current_selection = current_tab.selectionModel()
+        else:
+            # Handle the case when there is no current tab
+            self.current_selection = None
 
         # List of loaded song files for saving the playlist
         # self.song_files: list[SongFile] = []
@@ -807,7 +810,10 @@ class MainWindow(QtWidgets.QMainWindow):
 
     @QtCore.Slot()
     def sort_clicked(self):
-        indexes = self.get_current_tab().selectedIndexes()
+        current_tab = self.get_current_tab()
+
+        if current_tab:
+            indexes = current_tab.selectedIndexes()
 
         # print(indexes[0].row())
 
@@ -851,57 +857,55 @@ class MainWindow(QtWidgets.QMainWindow):
 
         model = current_tab.model()
 
-        if isinstance(model, PlaylistModel):
-            # Get song from user data in column
-            song: Song = model.itemFromIndex(current_tab.model().index(row, 0)).data(
-                Qt.ItemDataRole.UserRole
-            )
+        song = self.song_from_index(model.index(row, 0))
 
-            # Stop the player if it's already playing
-            if not continue_:
-                if self.player_thread.status in (
-                    PLAYERTHREADSTATUS.PLAYING,
-                    PLAYERTHREADSTATUS.PAUSED,
-                ):
-                    self.stop(False)
+        if song:
+            if isinstance(model, PlaylistModel):
+                # Stop the player if it's already playing
+                if not continue_:
+                    if self.player_thread.status in (
+                        PLAYERTHREADSTATUS.PLAYING,
+                        PLAYERTHREADSTATUS.PAUSED,
+                    ):
+                        self.stop(False)
 
-                self.play_file_thread(song)
-                current_tab.current_row = row
+                    self.play_file_thread(song)
+                    current_tab.current_row = row
 
-                # Select playing track
-                current_tab.selectionModel().select(
-                    current_tab.model().index(current_tab.current_row, 0),
-                    QItemSelectionModel.SelectionFlag.SelectCurrent
-                    | QItemSelectionModel.SelectionFlag.Rows,
-                )
+                    # Select playing track
+                    current_tab.selectionModel().select(
+                        current_tab.model().index(current_tab.current_row, 0),
+                        QItemSelectionModel.SelectionFlag.SelectCurrent
+                        | QItemSelectionModel.SelectionFlag.Rows,
+                    )
 
-                # bytes = 0
+                    # bytes = 0
 
-                # if hasattr(song, 'subsong'):
-                #     bytes = song.subsong.bytes
-                # else:
-                #     bytes = song.song_file.modulebytes
+                    # if hasattr(song, 'subsong'):
+                    #     bytes = song.subsong.bytes
+                    # else:
+                    #     bytes = song.song_file.modulebytes
 
-                # Set timeline and duration
-                self.timeline.setMaximum(int(song.song_file.duration * 100))
-                self.time_total.setText(
-                    str(datetime.timedelta(seconds=song.song_file.duration)).split(".")[
-                        0
-                    ]
-                )
+                    # Set timeline and duration
+                    self.timeline.setMaximum(int(song.song_file.duration * 100))
+                    self.time_total.setText(
+                        str(datetime.timedelta(seconds=song.song_file.duration)).split(
+                            "."
+                        )[0]
+                    )
 
-                # Set current song (for pausing)
-                # self.current_selection.setCurrentIndex(current_tab.model().index(current_tab.current_row, 0), QItemSelectionModel.SelectCurrent)
-                self.player_thread.current_song = song
+                    # Set current song (for pausing)
+                    # self.current_selection.setCurrentIndex(current_tab.model().index(current_tab.current_row, 0), QItemSelectionModel.SelectCurrent)
+                    self.player_thread.current_song = song
 
-                # Show notification
-                self.show_song_notification(song)
+                    # Show notification
+                    self.show_song_notification(song)
 
-                log(LOG_TYPE.INFO, f"Now playing {song.song_file.filename}")
-                self.current_row = row
+                    log(LOG_TYPE.INFO, f"Now playing {song.song_file.filename}")
+                    self.current_row = row
 
-                # Update UI
-                self.tray.setToolTip(f"Playing {song.song_file.filename}")
+                    # Update UI
+                    self.tray.setToolTip(f"Playing {song.song_file.filename}")
             else:
                 pass
 
@@ -953,9 +957,10 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.play(row + 1, False)
 
     def play_previous_item(self) -> None:
-        index = self.current_selection.currentIndex()
+        if self.current_selection:
+            index = self.current_selection.currentIndex()
 
-        row = index.row()
+            row = index.row()
 
         current_tab = self.get_current_tab()
         if current_tab:
