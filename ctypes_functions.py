@@ -22,12 +22,12 @@ try:
 except OSError as e:
     sys.exit(f"Error loading bencodetools: {e}")
 
-uade_path = find_library("uade")
-if not uade_path:
+uade_path_ = find_library("uade")
+if not uade_path_:
     sys.exit("Error: uade not found")
 
 try:
-    libuade = CDLL(uade_path, mode=RTLD_GLOBAL)
+    libuade = CDLL(uade_path_, mode=RTLD_GLOBAL)
 except OSError as e:
     sys.exit(f"Error loading uade: {e}")
 
@@ -46,9 +46,11 @@ libuade.uade_read.argtypes = [c_void_p, c_size_t, c_void_p]
 libuade.uade_read.restype = c_ssize_t
 
 libuade.uade_get_fd.argtypes = [c_void_p]
+libuade.uade_get_fd.restype = c_int
 
 # Playback control
 libuade.uade_play.argtypes = [c_char_p, c_int, c_void_p]
+libuade.uade_play_from_buffer.argtypes = [c_char_p, c_void_p, c_size_t, c_int, c_void_p]
 libuade.uade_stop.argtypes = [c_void_p]
 
 libuade.uade_seek.argtypes = [c_int, c_double, c_int, c_void_p]
@@ -80,3 +82,10 @@ libuade.uade_event_name.argtypes = [c_void_p]
 libuade.uade_event_name.restype = c_char_p
 
 libuade.uade_song_info.argtypes = [c_char_p, c_uint, c_char_p, c_int]
+
+libuade.uade_new_config.argtypes = []
+libuade.uade_new_config.restype = c_void_p
+
+libuade.uade_set_debug.argtypes = [c_void_p]
+
+libuade.uade_enable_uadecore_log_collection.argtypes = [c_void_p]
