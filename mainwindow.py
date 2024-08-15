@@ -653,7 +653,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def get_current_tab_index(self) -> int:
         return self.playlist_tabs.tabBar().currentIndex()
 
-    def open_context_menu(self, position: int) -> None:
+    def open_context_menu(self, position: QtCore.QPoint) -> None:
         # Song context menu
 
         menu = QMenu()
@@ -666,9 +666,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         current_tab = self.get_current_tab()
         if current_tab:
-            menu.exec(
-                current_tab.viewport().mapToGlobal(QtCore.QPoint(position, position))
-            )
+            menu.exec(current_tab.viewport().mapToGlobal(position))
 
     def delete_selected_items(self):
         current_tab = self.get_current_tab()
