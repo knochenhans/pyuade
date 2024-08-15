@@ -84,7 +84,7 @@ class Uade(QObject):
 
     def __init__(self):
         super().__init__()
-        self.pyaudio = pyaudio.PyAudio()
+        # self.pyaudio = pyaudio.PyAudio()
         self.stream = None
 
     def __del__(self):

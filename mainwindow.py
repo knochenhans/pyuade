@@ -36,7 +36,7 @@ from PySide6.QtWidgets import (
 
 from ctypes_functions import *
 from loader_thread import LoaderThread
-from player_thread import PLAYERTHREADSTATUS, PlayerThread
+from player_thread import STATUS, PlayerThread
 from playlist import (
     PlaylistExport,
     PlaylistItem,
@@ -120,8 +120,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.loader_thread = LoaderThread(self)
         self.loader_thread.finished.connect(self.loader_finished)
 
-        uade.song_end.connect(self.item_finished)
-        uade.current_seconds_update.connect(self.timeline_update_seconds)
         self.timeline.sliderPressed.connect(self.timeline_pressed)
         self.timeline.sliderReleased.connect(self.timeline_released)
 
@@ -850,6 +848,9 @@ class MainWindow(QtWidgets.QMainWindow):
         c.notify_all(notification)
 
     def play(self, row: int, continue_: bool = True):
+        self.player_thread.song_finished.connect(self.item_finished)
+        self.player_thread.current_seconds_update.connect(self.timeline_update_seconds)
+
         current_tab = self.get_current_tab()
 
         if not current_tab:
@@ -864,8 +865,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 # Stop the player if it's already playing
                 if not continue_:
                     if self.player_thread.status in (
-                        PLAYERTHREADSTATUS.PLAYING,
-                        PLAYERTHREADSTATUS.PAUSED,
+                        STATUS.PLAYING,
+                        STATUS.PAUSED,
                     ):
                         self.stop(False)
 
@@ -916,22 +917,22 @@ class MainWindow(QtWidgets.QMainWindow):
             )
 
             self.set_play_status(row, True)
-            self.player_thread.status = PLAYERTHREADSTATUS.PLAYING
+            self.player_thread.status = STATUS.PLAYING
 
     def play_file_thread(self, song: Song) -> None:
         self.player_thread.current_song = song
         self.player_thread.start()
-        self.player_thread.status = PLAYERTHREADSTATUS.PLAYING
 
     def stop(self, pause_thread: bool) -> None:
         if pause_thread:
-            self.player_thread.status = PLAYERTHREADSTATUS.PAUSED
+            self.player_thread.status = STATUS.PAUSED
         else:
-            self.player_thread.status = PLAYERTHREADSTATUS.STOPPED
+            self.player_thread.status = STATUS.STOPPED
             self.timeline.setSliderPosition(0)
             self.time.setText("00:00")
             self.time_total.setText("00:00")
             self.setWindowTitle("pyuade")
+        
         self.player_thread.quit()
         self.player_thread.wait()
         self.play_action.setIcon(QIcon(os.path.join(path, "play.png")))
@@ -971,7 +972,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     # @ QtCore.Slot()
     # def timeline_update(self, bytes: int) -> None:
-    #     if self.playerthread.status == PLAYERTHREADSTATUS.PLAYING:
+    #     if self.playerthread.status == STATUS.PLAYING:
     #         if self.timeline_tracking:
     #             self.timeline.setValue(bytes)
 
@@ -980,7 +981,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     @QtCore.Slot()
     def timeline_update_seconds(self, seconds: float) -> None:
-        if self.player_thread.status == PLAYERTHREADSTATUS.PLAYING:
+        if self.player_thread.status == STATUS.PLAYING:
             if self.timeline_tracking:
                 self.timeline.setValue(int(seconds * 100))
 
@@ -1002,7 +1003,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     @QtCore.Slot()
     def load_folder_clicked(self):
-        if self.player_thread.status != PLAYERTHREADSTATUS.PLAYING:
+        if self.player_thread.status != STATUS.PLAYING:
             last_open_path = self.config.get("files", "last_open_path", fallback=".")
             dir = QFileDialog.getExistingDirectory(
                 self,
@@ -1016,7 +1017,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     @QtCore.Slot()
     def load_clicked(self):
-        if not self.player_thread.status == PLAYERTHREADSTATUS.PLAYING:
+        if not self.player_thread.status == STATUS.PLAYING:
             if self.config.has_option("files", "last_open_path"):
                 last_open_path = self.config["files"]["last_open_path"]
 
@@ -1060,15 +1061,15 @@ class MainWindow(QtWidgets.QMainWindow):
         if current_tab:
             if current_tab.model().rowCount(current_tab.rootIndex()) > 0:
                 match self.player_thread.status:
-                    case PLAYERTHREADSTATUS.PLAYING:
+                    case STATUS.PLAYING:
                         # Play -> pause
                         self.stop(True)
-                    case PLAYERTHREADSTATUS.PAUSED:
+                    case STATUS.PAUSED:
                         # Pause -> play
                         self.play(current_tab.current_row)
                         # uade.seek_seconds(self.timeline.sliderPosition() / 100)
                         self.play_action.setIcon(QIcon(path + "/pause.png"))
-                    case PLAYERTHREADSTATUS.STOPPED:
+                    case STATUS.STOPPED:
                         self.play(current_tab.current_row, False)
 
     @QtCore.Slot()
