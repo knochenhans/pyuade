@@ -919,6 +919,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def play_file_thread(self, song: Song) -> None:
         self.player_thread.current_song = song
+        self.player_thread.status = STATUS.PLAYING
         self.player_thread.start()
 
     def stop(self, pause_thread: bool) -> None:
@@ -930,7 +931,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.time.setText("00:00")
             self.time_total.setText("00:00")
             self.setWindowTitle("pyuade")
-        
+
         self.player_thread.quit()
         self.player_thread.wait()
         self.play_action.setIcon(QIcon(os.path.join(path, "play.png")))

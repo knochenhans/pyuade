@@ -28,13 +28,15 @@ class PlayerThread(QtCore.QThread):
         self.status = STATUS.STOPPED
         self.current_song: Song
 
+        log(LOG_TYPE.INFO, f"[PlayerThread] PlayerThread created")
+
     # def debugger_is_active(self) -> bool:
     #     gettrace = getattr(sys, 'gettrace', lambda: None)
     #     return gettrace() is not None
 
     def run(self):
         # if self.debugger_is_active():
-        debugpy.debug_this_thread()
+        # debugpy.debug_this_thread()
 
         if self.status == STATUS.PLAYING:
             self.setPriority(QtCore.QThread.Priority.HighestPriority)
@@ -54,17 +56,19 @@ class PlayerThread(QtCore.QThread):
                 output=True,
             )
 
+            log(LOG_TYPE.INFO, f"[PlayerThread] Entering UADE Core loop")
+
             while self.status == STATUS.PLAYING:
                 try:
                     self.uade_instance.play_loop(stream)
                 except EOFError as e:
-                    log(LOG_TYPE.INFO, f"UADE Core stopped: {e}")
+                    log(LOG_TYPE.INFO, f"[PlayerThread] UADE Core stopped: {e}")
                     self.status = STATUS.FINISHED
                 except RuntimeError as e:
-                    log(LOG_TYPE.ERROR, f"UADE Core playing failed: {e}")
+                    log(LOG_TYPE.ERROR, f"[PlayerThread] UADE Core playing failed: {e}")
                     self.status = STATUS.FINISHED
                 except RuntimeWarning as e:
-                    log(LOG_TYPE.WARNING, f"UADE Core playing warning: {e}")
+                    log(LOG_TYPE.WARNING, f"[PlayerThread] UADE Core playing warning: {e}")
 
                 song_info = self.uade_instance.get_song_info()
                 self.current_seconds_update.emit(
@@ -80,6 +84,8 @@ class PlayerThread(QtCore.QThread):
             stream.stop_stream()
             stream.close()
             pyaudio.terminate()
+
+        log(LOG_TYPE.INFO, f"[PlayerThread] PlayerThread finished")
 
             # try:
             #     uade.prepare_play(self.current_song)
