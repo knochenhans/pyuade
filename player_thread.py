@@ -50,11 +50,12 @@ class PlayerThread(QtCore.QThread):
             pyaudio = PyAudio()
 
             stream = pyaudio.open(
-                format=pyaudio.get_format_from_width(2),
-                channels=2,
-                rate=self.uade_instance.get_sample_rate(),
-                output=True,
-            )
+                    format=pyaudio.get_format_from_width(2),
+                    channels=2,
+                    rate=self.uade_instance.get_sample_rate(),
+                    output=True,
+                    frames_per_buffer=1024,
+                )
 
             log(LOG_TYPE.INFO, f"[PlayerThread] Entering UADE Core loop")
 
