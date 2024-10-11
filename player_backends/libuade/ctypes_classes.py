@@ -6,6 +6,7 @@ from ctypes import (
     c_int,
     c_size_t,
     c_double,
+    c_uint32,
     c_uint64,
     c_ubyte,
     c_int64,
@@ -14,6 +15,10 @@ from ctypes import (
     c_void_p,
 )
 from enum import IntEnum
+
+UADE_CHANNELS = 2
+UADE_BYTES_PER_SAMPLE = 2
+UADE_BYTES_PER_FRAME = UADE_CHANNELS * UADE_BYTES_PER_SAMPLE
 
 PATH_MAX = 4096
 UADE_MAX_MESSAGE_SIZE = 8 + 4096
@@ -286,6 +291,52 @@ class eagleplayermap(Structure):
     ]
 
 
+# IPC
+
+
+class uade_msgtype(IntEnum):
+    UADE_MSG_FIRST = 0
+    UADE_COMMAND_ACTIVATE_DEBUGGER = 1
+    UADE_COMMAND_CHANGE_SUBSONG = 2
+    UADE_COMMAND_CONFIG = 3
+    UADE_COMMAND_SCORE = 4
+    UADE_COMMAND_PLAYER = 5
+    UADE_COMMAND_MODULE = 6
+    UADE_COMMAND_READ = 7
+    UADE_COMMAND_REBOOT = 8
+    UADE_COMMAND_SET_SUBSONG = 9
+    UADE_COMMAND_IGNORE_CHECK = 10
+    UADE_COMMAND_SONG_END_NOT_POSSIBLE = 11
+    UADE_COMMAND_SET_NTSC = 12
+    UADE_COMMAND_FILTER = 13
+    UADE_COMMAND_SET_FREQUENCY = 14
+    UADE_COMMAND_SET_PLAYER_OPTION = 15
+    UADE_COMMAND_SET_QUAD_MODE = 16  # by Airmann
+    UADE_COMMAND_SET_RESAMPLING_MODE = 17
+    UADE_COMMAND_SPEED_HACK = 18
+    UADE_COMMAND_TOKEN = 19
+    UADE_COMMAND_USE_TEXT_SCOPE = 20
+    UADE_REPLY_MSG = 21
+    UADE_REPLY_CANT_PLAY = 22
+    UADE_REPLY_CAN_PLAY = 23
+    UADE_REPLY_SONG_END = 24
+    UADE_REPLY_SUBSONG_INFO = 25
+    UADE_REPLY_PLAYERNAME = 26
+    UADE_REPLY_MODULENAME = 27
+    UADE_REPLY_FORMATNAME = 28
+    UADE_REPLY_DATA = 29
+    UADE_MSG_LAST = 30
+
+
+class uade_msg(Structure):
+    _fields_ = [
+        ("msgtype", c_uint32),
+        ("size", c_uint32),
+        ("data", c_ubyte * 0),
+    ]
+    _pack_ = 1
+
+
 class eagleplayerstore(Structure):
     _fields_ = [
         ("nplayers", c_size_t),
@@ -308,4 +359,17 @@ class uade_ipc(Structure):
         ("inputbytes", c_uint64),
         ("inputbuffer", c_char * UADE_MAX_MESSAGE_SIZE),
         ("state", c_int),  # uade_control_state
+    ]
+
+
+class uade_state(Structure):
+    _fields_ = [
+        ("config", uade_config),
+        ("song", POINTER(uade_song)),
+        ("effects", uade_effect),
+        ("ep", POINTER(eagleplayer)),
+        ("validconfig", c_int),
+        ("playerstore", POINTER(eagleplayerstore)),
+        ("ipc", uade_ipc),
+        ("pid", c_int),  # pid_t is typically an int in C
     ]
