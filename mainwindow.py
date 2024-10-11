@@ -757,8 +757,17 @@ class MainWindow(QtWidgets.QMainWindow):
                 # self.playManager.player_thread.current_seconds_update.connect(
                 #     self.timeline_update_seconds
                 # )
+                buffer = self.settings.value("buffer", type=int)
 
-                self.audio_backend = AudioBackendPyAudio(44100, 8192)
+                if not isinstance(buffer, int):
+                    buffer = 8192
+
+                samplerate = self.settings.value("samplerate", type=int)
+
+                if not isinstance(samplerate, int):
+                    samplerate = 44100
+
+                self.audio_backend = AudioBackendPyAudio(samplerate, buffer)
 
                 if self.player_backend is not None:
                     self.player_thread = PlayerThread(
