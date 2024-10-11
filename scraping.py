@@ -1,20 +1,20 @@
 import hashlib
-from pathlib import Path
 import re
+from pathlib import Path
 
-from bs4 import BeautifulSoup
-from platformdirs import user_config_dir
 import requests
+from bs4 import BeautifulSoup
+from loguru import logger
+from platformdirs import user_config_dir
 
 from uade import Song
-from utils.log import LOG_TYPE, log
 
 
 def scrape_modarchive(username: str, song: Song) -> Song | None:
     license_file = Path(user_config_dir(username)) / "modarchive-api.key"
 
     if not license_file.exists():
-        log(LOG_TYPE.ERROR, "No modarchive-api.key found in config folder!")
+        logger.error("No modarchive-api.key found in config folder!")
         return None
 
     with open(license_file, "r") as f:
@@ -23,10 +23,7 @@ def scrape_modarchive(username: str, song: Song) -> Song | None:
     with requests.Session() as session:
         md5 = hashlib.md5()
 
-        log(
-            LOG_TYPE.INFO,
-            f"Looking up {song.song_file.filename} in ModArchive.",
-        )
+        logger.info(f"Looking up {song.song_file.filename} in ModArchive.")
 
         with open(song.song_file.filename, "rb") as f:
             data = f.read()
@@ -46,9 +43,8 @@ def scrape_modarchive(username: str, song: Song) -> Song | None:
 
                 if xml_module:
                     if int(xml_tree.find("results").text) > 0:
-                        log(
-                            LOG_TYPE.SUCCESS,
-                            f"ModArchive Metadata found for {song.song_file.filename}.",
+                        logger.success(
+                            f"ModArchive Metadata found for {song.song_file.filename}."
                         )
                         xml_artist_info = xml_module.find("artist_info")
 
@@ -59,21 +55,18 @@ def scrape_modarchive(username: str, song: Song) -> Song | None:
 
                             song.song_file.author = xml_artist.find("alias").text
 
-                            log(
-                                LOG_TYPE.INFO,
-                                f"Artist {song.song_file.author} found for {song.song_file.filename}.",
+                            logger.info(
+                                f"Artist {song.song_file.author} found for {song.song_file.filename}."
                             )
 
                     else:
-                        log(
-                            LOG_TYPE.WARNING,
-                            f"More than 1 results for md5 of {song.song_file.filename} found!",
+                        logger.warning(
+                            f"More than 1 results for md5 of {song.song_file.filename} found!"
                         )
 
                 else:
-                    log(
-                        LOG_TYPE.WARNING,
-                        f"No ModArchive results found for {song.song_file.filename}!",
+                    logger.warning(
+                        f"No ModArchive results found for {song.song_file.filename}!"
                     )
 
     return song

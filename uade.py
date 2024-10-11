@@ -1,6 +1,6 @@
 from ctypes import byref, c_char, c_size_t, c_ubyte, c_void_p
 
-import pyaudio
+from loguru import logger
 from PySide6 import QtCore
 from PySide6.QtCore import QObject, Signal
 
@@ -19,7 +19,6 @@ from player_backends.libuade.ctypes_classes import (
     uade_subsong_info,
 )
 from player_backends.libuade.ctypes_functions import libuade
-from utils.log import LOG_TYPE, log
 
 
 class SubsongData:
@@ -116,7 +115,7 @@ class Uade(QObject):
 
         e: int = libuade.uade_get_event(byref(event), state)
 
-        log(LOG_TYPE.INFO, f"event type: {event.type}")
+        logger.info(f"event type: {event.type}")
 
         return event
 
@@ -139,7 +138,7 @@ class Uade(QObject):
             )
             != 0
         ):
-            log(LOG_TYPE.ERROR, "Seeking failed")
+            logger.error("Seeking failed")
 
     @QtCore.Slot()
     def position_changed(self, seconds: float):
@@ -299,8 +298,7 @@ class Uade(QObject):
                     if s:
                         subsong.subsong = s
                 except:
-                    log(
-                        LOG_TYPE.ERROR,
+                    logger.error(
                         f"Playback error while scanning, discarding song: {song_file.filename}",
                     )
 
@@ -371,47 +369,41 @@ class Uade(QObject):
         if libuade.uade_read_notification(notification, self.state) == 1:
             if notification.type == UADE_NOTIFICATION_TYPE.UADE_NOTIFICATION_MESSAGE:
                 if notification_union.msg:
-                    log(
-                        LOG_TYPE.INFO,
+                    logger.info(
                         "Amiga message: " + notification_union.msg.decode(),
                     )
             elif notification.type == UADE_NOTIFICATION_TYPE.UADE_NOTIFICATION_SONG_END:
                 # self.song_end.emit()
 
                 if notification_song_end.happy != 0:
-                    log(
-                        LOG_TYPE.INFO,
+                    logger.info(
                         "song_end.happy: " + str(notification_song_end.happy),
                     )
 
                 if notification_song_end.stopnow != 0:
-                    log(
-                        LOG_TYPE.INFO,
+                    logger.info(
                         "song_end.stopnow: " + str(notification_song_end.stopnow),
                     )
 
                 if notification_song_end.subsong != 0:
-                    log(
-                        LOG_TYPE.INFO,
+                    logger.info(
                         "song_end.subsong: " + str(notification_song_end.subsong),
                     )
 
                 if notification_song_end.subsongbytes != 0:
-                    log(
-                        LOG_TYPE.INFO,
+                    logger.info(
                         "song_end.subsongbytes: "
                         + str(notification_song_end.subsongbytes),
                     )
 
                 if notification_song_end.reason:
-                    log(
-                        LOG_TYPE.INFO,
+                    logger.info(
                         "song_end.reason: " + notification_song_end.reason,
                     )
 
                 return False
             else:
-                log(LOG_TYPE.INFO, "Unknown notification type from libuade")
+                logger.info("Unknown notification type from libuade")
 
             libuade.uade_cleanup_notification(notification)
 
@@ -427,7 +419,7 @@ class Uade(QObject):
         songinfo: uade_song_info = libuade.uade_get_song_info(self.state).contents
 
         if libuade.uade_is_seeking(self.state) == 1:
-            log(LOG_TYPE.INFO, "Currently seeking...")
+            logger.info("Currently seeking...")
 
         nbytes = libuade.uade_read(self.buf, self.buf_len, self.state)
 
@@ -499,7 +491,7 @@ class Uade(QObject):
         # print("Stop playing")
 
         if libuade.uade_stop(self.state) != 0:
-            log(LOG_TYPE.ERROR, "uade_stop error")
+            logger.error("uade_stop error")
 
         libuade.uade_cleanup_state(self.state)
 
