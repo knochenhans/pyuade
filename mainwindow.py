@@ -150,7 +150,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.icon_filenames = {"play", "pause", "stop", "prev", "next"}
 
         for icon in self.icon_filenames:
-            self.icons[icon] = QIcon(os.path.join(path, f"{icon}.png"))
+            self.icons[icon] = QIcon(os.path.join("images", f"{icon}.png"))
 
         # Columns
 
@@ -234,22 +234,22 @@ class MainWindow(QtWidgets.QMainWindow):
         self.quit_action.setShortcut(QKeySequence("Ctrl+q"))
         self.quit_action.triggered.connect(self.quit_clicked)
 
-        self.play_action = QAction(QIcon(os.path.join(path, "play.png")), "Play", self)
+        self.play_action = QAction(QIcon(os.path.join("images", "play.png")), "Play", self)
         self.play_action.setStatusTip("Play")
         self.play_action.setShortcut(QKeySequence("p"))
         self.play_action.triggered.connect(self.play_pause_clicked)
 
-        self.stop_action = QAction(QIcon(os.path.join(path, "stop.png")), "Stop", self)
+        self.stop_action = QAction(QIcon(os.path.join("images", "stop.png")), "Stop", self)
         self.stop_action.setStatusTip("Stop")
         self.stop_action.setShortcut(QKeySequence("s"))
         self.stop_action.triggered.connect(self.stop_clicked)
 
-        self.prev_action = QAction(QIcon(os.path.join(path, "prev.png")), "Prev", self)
+        self.prev_action = QAction(QIcon(os.path.join("images", "prev.png")), "Prev", self)
         self.prev_action.setStatusTip("Prev")
         self.prev_action.setShortcut(QKeySequence("b"))
         self.prev_action.triggered.connect(self.prev_clicked)
 
-        self.next_action = QAction(QIcon(os.path.join(path, "next.png")), "Next", self)
+        self.next_action = QAction(QIcon(os.path.join("images", "next.png")), "Next", self)
         self.next_action.setStatusTip("Next")
         self.next_action.setShortcut(QKeySequence("n"))
         self.next_action.triggered.connect(self.next_clicked)
@@ -698,7 +698,7 @@ class MainWindow(QtWidgets.QMainWindow):
         notification = Notification(
             title=notification_title,
             message=notification_message,
-            icon_path=os.path.join(path, "play.png"),
+            icon_path=os.path.join("images", "play.png"),
         )
 
         c = NotificationClient()
