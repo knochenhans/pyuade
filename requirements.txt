@@ -2,7 +2,6 @@ appdirs==1.4.4
 beautifulsoup4==4.11.1
 debugpy==1.6.3
 jsonpickle==2.2.0
-notify-py==0.3.3
 PyAudio==0.2.12
 pydub==0.25.1
 pynput==1.7.6

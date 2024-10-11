@@ -11,33 +11,45 @@ import jsonpickle
 import psutil
 from appdirs import user_config_dir
 from loguru import logger
-from pynotifier import Notification, NotificationClient
-from pynotifier.backends import platform
 from PySide6 import QtCore, QtWidgets
-from PySide6.QtCore import (QCoreApplication, QEvent, QItemSelectionModel,
-                            QModelIndex, QSize, Qt)
+from PySide6.QtCore import (
+    QCoreApplication,
+    QEvent,
+    QItemSelectionModel,
+    QModelIndex,
+    QSize,
+    Qt,
+)
 from PySide6.QtGui import QAction, QIcon, QKeyEvent, QKeySequence
-from PySide6.QtWidgets import (QLabel, QMenu, QSlider, QStatusBar,
-                               QSystemTrayIcon, QToolBar)
+from PySide6.QtWidgets import (
+    QLabel,
+    QMenu,
+    QSlider,
+    QStatusBar,
+    QSystemTrayIcon,
+    QToolBar,
+)
 
 import configmanager
-# from ctypes_functions import *
+
 from audio_backends.pyaudio.audio_backend_pyuadio import AudioBackendPyAudio
 from loader_thread import LoaderThread
 from options import Options
-from player_backends.libopenmpt.player_backend_libopenmpt import \
-    PlayerBackendLibOpenMPT
-from player_backends.libuade.ctypes_classes import uade_song_info
+from player_backends.libopenmpt.player_backend_libopenmpt import PlayerBackendLibOpenMPT
 from player_backends.libuade.player_backend_libuade import PlayerBackendLibUADE
-from player_backends.libuade.songinfo import UadeSongInfoType
 from player_backends.player_backend import PlayerBackend
 from player_thread import PlayerThread
-from playlist import (PlaylistExport, PlaylistItem, PlaylistModel, PlaylistTab,
-                      PlaylistTreeView)
+from playlist import (
+    PlaylistExport,
+    PlaylistItem,
+    PlaylistModel,
+    PlaylistTab,
+    PlaylistTreeView,
+)
 from scraping import lookup_msm, scrape_modarchive, scrape_modland, scrape_msm
 from song_info_dialog import SongInfoDialog
 from uade import Song, uade
-from util import TREEVIEWCOL, path
+from util import TREEVIEWCOL
 
 
 class MainWindow(QtWidgets.QMainWindow):
@@ -234,22 +246,30 @@ class MainWindow(QtWidgets.QMainWindow):
         self.quit_action.setShortcut(QKeySequence("Ctrl+q"))
         self.quit_action.triggered.connect(self.quit_clicked)
 
-        self.play_action = QAction(QIcon(os.path.join("images", "play.png")), "Play", self)
+        self.play_action = QAction(
+            QIcon(os.path.join("images", "play.png")), "Play", self
+        )
         self.play_action.setStatusTip("Play")
         self.play_action.setShortcut(QKeySequence("p"))
         self.play_action.triggered.connect(self.play_pause_clicked)
 
-        self.stop_action = QAction(QIcon(os.path.join("images", "stop.png")), "Stop", self)
+        self.stop_action = QAction(
+            QIcon(os.path.join("images", "stop.png")), "Stop", self
+        )
         self.stop_action.setStatusTip("Stop")
         self.stop_action.setShortcut(QKeySequence("s"))
         self.stop_action.triggered.connect(self.stop_clicked)
 
-        self.prev_action = QAction(QIcon(os.path.join("images", "prev.png")), "Prev", self)
+        self.prev_action = QAction(
+            QIcon(os.path.join("images", "prev.png")), "Prev", self
+        )
         self.prev_action.setStatusTip("Prev")
         self.prev_action.setShortcut(QKeySequence("b"))
         self.prev_action.triggered.connect(self.prev_clicked)
 
-        self.next_action = QAction(QIcon(os.path.join("images", "next.png")), "Next", self)
+        self.next_action = QAction(
+            QIcon(os.path.join("images", "next.png")), "Next", self
+        )
         self.next_action.setStatusTip("Next")
         self.next_action.setShortcut(QKeySequence("n"))
         self.next_action.triggered.connect(self.next_clicked)
@@ -691,15 +711,12 @@ class MainWindow(QtWidgets.QMainWindow):
             notification_message += song.song_file.modulename + " - "
         notification_message += song.song_file.filename
 
-        notification = Notification(
-            title=notification_title,
-            message=notification_message,
-            icon_path=os.path.join("images", "play.png"),
+        self.tray.showMessage(
+            notification_title,
+            notification_message,
+            QIcon(os.path.join("images", "play.png")),
+            10000,
         )
-
-        c = NotificationClient()
-        c.register_backend(platform.Backend())
-        c.notify_all(notification)
 
     def find_player(self, filename) -> str:
         # Try to load the module by going through the available player backends
