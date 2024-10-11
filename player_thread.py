@@ -1,107 +1,67 @@
-from enum import IntEnum
-import sys
+from typing import Optional
 
 import debugpy
-from PySide6 import QtCore
-from pyaudio import PyAudio
+from loguru import logger
+from PySide6.QtCore import QThread, Signal
 
-from uade import Song, uade
-from uade_instance import uade_instance
-from utils.log import log, LOG_TYPE
-
-
-class STATUS(IntEnum):
-    PLAYING = 0
-    PAUSED = 1
-    STOPPED = 2
-    FINISHED = 3
+from audio_backends.audio_backend import AudioBackend
+from player_backends.player_backend import PlayerBackend
 
 
-class PlayerThread(QtCore.QThread):
-    song_end = QtCore.Signal()
-    song_finished = QtCore.Signal()
-    current_seconds_update = QtCore.Signal(float)
+class PlayerThread(QThread):
+    position_changed = Signal(int, int)  # Signal to emit position and length
+    song_finished = Signal()  # Signal to emit when song is finished
 
-    def __init__(self, parent) -> None:
+    def __init__(
+        self,
+        player_backend: PlayerBackend,
+        audio_backend: AudioBackend,
+        parent: Optional[QThread] = None,
+    ) -> None:
         super().__init__(parent)
+        self.player_backend: PlayerBackend = player_backend
+        self.audio_backend: AudioBackend = audio_backend
+        self.stop_flag: bool = False
+        self.pause_flag: bool = False
+        logger.debug("PlayerThread initialized")
 
-        self.status = STATUS.STOPPED
-        self.current_song: Song
-
-        log(LOG_TYPE.INFO, f"[PlayerThread] PlayerThread created")
-
-    # def debugger_is_active(self) -> bool:
-    #     gettrace = getattr(sys, 'gettrace', lambda: None)
-    #     return gettrace() is not None
-
-    def run(self):
-        # if self.debugger_is_active():
+    def run(self) -> None:
         # debugpy.debug_this_thread()
+        module_length: float = self.player_backend.get_module_length()
+        logger.debug("Module length: {} seconds", module_length)
 
-        if self.status == STATUS.PLAYING:
-            self.setPriority(QtCore.QThread.Priority.HighestPriority)
-            self.uade_instance = uade_instance()
+        count: int = 0
 
-            ret, size = self.uade_instance.read_file(
-                self.current_song.song_file.filename
+        while not self.stop_flag:
+            if self.pause_flag:
+                self.msleep(100)  # Sleep for a short time to avoid busy-waiting
+                continue
+
+            count, buffer = self.player_backend.read_chunk(
+                self.audio_backend.samplerate, self.audio_backend.buffersize
             )
-            ret = self.uade_instance.play_from_buffer(ret, size)
+            if count == 0:
+                logger.debug("End of module reached")
+                break
+            self.audio_backend.write(buffer)
 
-            pyaudio = PyAudio()
+            # Emit position changed signal
+            current_position: float = self.player_backend.get_position_milliseconds()
+            self.position_changed.emit(int(current_position), int(module_length))
 
-            stream = pyaudio.open(
-                    format=pyaudio.get_format_from_width(2),
-                    channels=2,
-                    rate=self.uade_instance.get_sample_rate(),
-                    output=True,
-                    frames_per_buffer=1024,
-                )
+        self.audio_backend.stop()
 
-            log(LOG_TYPE.INFO, f"[PlayerThread] Entering UADE Core loop")
+        if count == 0:
+            self.song_finished.emit()
+            logger.debug("Song finished")
 
-            while self.status == STATUS.PLAYING:
-                try:
-                    self.uade_instance.play_loop(stream)
-                except EOFError as e:
-                    log(LOG_TYPE.INFO, f"[PlayerThread] UADE Core stopped: {e}")
-                    self.status = STATUS.FINISHED
-                except RuntimeError as e:
-                    log(LOG_TYPE.ERROR, f"[PlayerThread] UADE Core playing failed: {e}")
-                    self.status = STATUS.FINISHED
-                except RuntimeWarning as e:
-                    log(LOG_TYPE.WARNING, f"[PlayerThread] UADE Core playing warning: {e}")
+        self.player_backend.free_module()
+        logger.debug("Playback stopped")
 
-                song_info = self.uade_instance.get_song_info()
-                self.current_seconds_update.emit(
-                    song_info.contents.subsongbytes / 176400
-                )
-                # TODO: What about song_info.contents.songbytes?
+    def stop(self) -> None:
+        logger.debug("Stop signal received")
+        self.stop_flag = True
 
-            if self.status == STATUS.FINISHED:
-                self.song_finished.emit()
-            elif self.status == STATUS.STOPPED:
-                self.song_end.emit()
-
-            stream.stop_stream()
-            stream.close()
-            pyaudio.terminate()
-
-        log(LOG_TYPE.INFO, f"[PlayerThread] PlayerThread finished")
-
-            # try:
-            #     uade.prepare_play(self.current_song)
-            # except Exception as e:
-            #     log(LOG_TYPE.ERROR, f'prepare_play() failed: {e}')
-
-            # while self.status == PLAYERTHREADSTATUS.PLAYING:
-            #     try:
-            #         if not uade.play_threaded():
-            #             self.status = PLAYERTHREADSTATUS.STOPPED
-            #     except EOFError as e:
-            #         self.status = PLAYERTHREADSTATUS.STOPPED
-            #         print(e)
-            #     except Exception as e:
-            #         self.status = PLAYERTHREADSTATUS.STOPPED
-            #         log(LOG_TYPE.ERROR, f'play_threaded() failed: {e}')
-
-            # uade.stop()
+    def pause(self) -> None:
+        self.pause_flag = not self.pause_flag
+        logger.debug("Pause toggled: {}", self.pause_flag)
