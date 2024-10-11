@@ -11,6 +11,7 @@ from typing import Optional
 import jsonpickle
 import psutil
 from appdirs import user_config_dir
+from loguru import logger
 from pynotifier import Notification, NotificationClient
 from pynotifier.backends import platform
 from PySide6 import QtCore, QtWidgets
@@ -22,12 +23,10 @@ from PySide6.QtCore import (
     QSize,
     Qt,
 )
-from PySide6.QtGui import QAction, QIcon, QIntValidator, QKeySequence, QKeyEvent
+from PySide6.QtGui import QAction, QIcon, QKeyEvent, QKeySequence
 from PySide6.QtWidgets import (
-    QFileDialog,
     QLabel,
     QMenu,
-    QProgressDialog,
     QSlider,
     QStatusBar,
     QSystemTrayIcon,
@@ -62,6 +61,12 @@ class MainWindow(QtWidgets.QMainWindow):
     config = configparser.ConfigParser()
     settings = QtCore.QSettings("Andre Jonas", "pyuade")
 
+    icons: dict[str, QIcon] = {}
+
+    play_signal = QtCore.Signal()
+
+    log_prefix = "[MainWindow] "
+
     def __init__(self) -> None:
         super().__init__()
 
@@ -69,42 +74,18 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.setup_gui()
 
-        self.current_tab = 0
-        self.current_row = 0
-
-        self.player_thread = PlayerThread(self)
+        self.player_thread: Optional[PlayerThread] = None
         self.loader_thread = LoaderThread(self)
         self.loader_thread.finished.connect(self.loader_finished)
 
-        self.timeline.sliderPressed.connect(self.timeline_pressed)
-        self.timeline.sliderReleased.connect(self.timeline_released)
-
-        self.timeline_tracking: bool = True
-
         self.read_config()
 
-        current_tab = self.get_current_tab()
-        self.current_selection: Optional[QItemSelectionModel] = None
-
-        if current_tab:
-            self.current_selection = current_tab.selectionModel()
-        else:
-            # Handle the case when there is no current tab
-            self.current_selection = None
-
-        # List of loaded song files for saving the playlist
-        # self.song_files: list[SongFile] = []
-
-        self.play_icon = QIcon(os.path.join(path, "play.png"))
-
-        self.tray = QSystemTrayIcon(self.play_icon, parent=self)
-        # self.tray.setContextMenu(menu)
-        self.tray.show()
-
-        self.setWindowIcon(QIcon(os.path.join(path, "play.png")))
-        self.setAcceptDrops(True)
-
-        self.playlist_tabs.addtabButton.clicked.connect(self.new_tab)
+        self.player_backends = {
+            "LibUADE": PlayerBackendLibUADE,
+            "LibOpenMPT": PlayerBackendLibOpenMPT,
+        }
+        self.player_backend: Optional[PlayerBackend]
+        self.audio_backend: Optional[AudioBackendPyAudio] = None
 
     def filenames_from_paths(self, paths: list[str]) -> list[str]:
         file_paths = []
@@ -174,9 +155,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 try:
                     self.load_playlist_as_tab(playlist_filename)
                 except Exception as e:
-                    log(
-                        LOG_TYPE.ERROR,
-                        f"Error while loading playlist {playlist_filename}: {e}",
+                    logger.error(
+                        f"{self.log_prefix}Error while loading playlist {playlist_filename}: {e}"
                     )
                     self.add_tab("Default")
         else:
@@ -278,6 +258,11 @@ class MainWindow(QtWidgets.QMainWindow):
             playlist.write(str(jsonpickle.encode(self.playlist_from_tab(tab_nr))))
 
     def setup_gui(self) -> None:
+        self.icon_filenames = {"play", "pause", "stop", "prev", "next"}
+
+        for icon in self.icon_filenames:
+            self.icons[icon] = QIcon(os.path.join(path, f"{icon}.png"))
+
         # Columns
 
         self.labels: list[str] = []
@@ -313,6 +298,32 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.setStatusBar(QStatusBar(self))
 
+        self.current_tab = 0
+        self.current_row = 0
+
+        self.timeline_tracking: bool = True
+
+        current_tab = self.get_current_tab()
+        self.current_selection: Optional[QItemSelectionModel] = None
+
+        if current_tab:
+            self.current_selection = current_tab.selectionModel()
+        else:
+            # Handle the case when there is no current tab
+            self.current_selection = None
+
+        # List of loaded song files for saving the playlist
+        # self.song_files: list[SongFile] = []
+
+        self.tray = QSystemTrayIcon(self.icons["play"], parent=self)
+        # self.tray.setContextMenu(menu)
+        self.tray.show()
+
+        self.setWindowIcon(self.icons["play"])
+        self.setAcceptDrops(True)
+
+        self.playlist_tabs.addtabButton.clicked.connect(self.new_tab)
+
     def setup_actions(self) -> None:
         self.load_action = QAction("Load", self)
         self.load_action.setStatusTip("Load")
@@ -337,7 +348,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.play_action = QAction(QIcon(os.path.join(path, "play.png")), "Play", self)
         self.play_action.setStatusTip("Play")
         self.play_action.setShortcut(QKeySequence("p"))
-        self.play_action.triggered.connect(self.play_clicked)
+        self.play_action.triggered.connect(self.play_pause_clicked)
 
         self.stop_action = QAction(QIcon(os.path.join(path, "stop.png")), "Stop", self)
         self.stop_action.setStatusTip("Stop")
@@ -420,6 +431,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.timeline.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.timeline.setPageStep(5)
         self.timeline.setTracking(False)
+        self.timeline.sliderPressed.connect(self.timeline_pressed)
+        self.timeline.sliderReleased.connect(self.timeline_released)
         # timeline.setStyleSheet("QSlider::handle:horizontal {background-color: red;}")
         toolbar.addWidget(self.timeline)
 
@@ -497,13 +510,12 @@ class MainWindow(QtWidgets.QMainWindow):
                     col = model.itemFromIndex(current_tab.model().index(row, 0))
 
                     if enable:
-                        col.setData(self.play_icon, Qt.ItemDataRole.DecorationRole)
+                        col.setData(self.icons["play"], Qt.ItemDataRole.DecorationRole)
                     else:
                         col.setData(QIcon(), Qt.ItemDataRole.DecorationRole)
 
+    # Add subsong to playlist
     def load_song(self, song: Song, tab=None) -> None:
-        # Add subsong to playlist
-
         tree_cols: list[PlaylistItem] = []
 
         if hasattr(song, "subsong"):
@@ -554,9 +566,8 @@ class MainWindow(QtWidgets.QMainWindow):
         try:
             song_file = uade.scan_song_file(filename)
         except:
-            log(
-                LOG_TYPE.ERROR,
-                f'Loading {filename.encode("utf-8", "surrogateescape").decode("ISO-8859-1")} failed, song skipped',
+            logger.error(
+                f'{self.log_prefix}Loading {filename.encode("utf-8", "surrogateescape").decode("ISO-8859-1")} failed, song skipped'
             )
         else:
             print(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
@@ -657,6 +668,10 @@ class MainWindow(QtWidgets.QMainWindow):
 
     @QtCore.Slot()
     def show_song_info(self) -> None:
+        uade_song_info(
+            "/home/andre/Musik/Retro/Necros/orbital delusions.mod",
+            UadeSongInfoType.UADE_MODULE_INFO,
+        )
         current_tab = self.get_current_tab()
         if current_tab:
             index = current_tab.selectionModel().selectedRows(0)[0]
@@ -756,8 +771,6 @@ class MainWindow(QtWidgets.QMainWindow):
 
     @QtCore.Slot()
     def quit_clicked(self):
-        # self.stop(False)
-        # self.player_thread.wait()
         QCoreApplication.quit()
 
     @QtCore.Slot()
@@ -776,10 +789,12 @@ class MainWindow(QtWidgets.QMainWindow):
 
     @QtCore.Slot()
     def item_double_clicked(self, index: QModelIndex):
+        self.stop()
+        self.reset_gui()
         # TODO: why [0].row()?
         current_tab = self.get_current_tab()
         if current_tab:
-            self.play(current_tab.selectedIndexes()[0].row(), False)
+            self.play_at_index(current_tab.selectedIndexes()[0].row())
 
     def show_song_notification(self, song: Song):
         notification_title = "Now playing"
@@ -801,30 +816,87 @@ class MainWindow(QtWidgets.QMainWindow):
         c.register_backend(platform.Backend())
         c.notify_all(notification)
 
-    def play(self, row: int, continue_: bool = True):
-        self.player_thread.song_finished.connect(self.item_finished)
-        self.player_thread.current_seconds_update.connect(self.timeline_update_seconds)
+    def find_player(self, filename) -> str:
+        # Try to load the module by going through the available player backends
+        for backend_name, backend_class in self.player_backends.items():
+            logger.debug(f"Trying player backend: {backend_name}")
 
-        current_tab = self.get_current_tab()
+            player_backend = backend_class()
+            if player_backend is not None:
+                if player_backend.load_module(filename):
+                    self.player_backend = player_backend
+                    break
 
-        if not current_tab:
-            return
+        if self.player_backend is None:
+            raise ValueError("No player backend could load the module, skipping")
+        logger.debug(f"Module successfully loaded with player backend: {backend_name}")
+        return backend_name
 
-        model = current_tab.model()
+    # Play the song at the given row
+    def play_at_index(self, row: int):
+        if self.player_thread and self.player_thread.isRunning():
+            self.player_thread.pause()
+            if self.player_thread.pause_flag:
+                # self.play_button.setIcon(
+                #     self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPlay)
+                # )
+                # self.stop_button.setEnabled(False)
+                pass
+            else:
+                # self.play_button.setIcon(
+                #     self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPause)
+                # )
+                # self.stop_button.setEnabled(True)
+                pass
+        else:
+            current_tab = self.get_current_tab()
 
-        song = self.song_from_index(model.index(row, 0))
+            if not current_tab:
+                return
 
-        if song:
-            if isinstance(model, PlaylistModel):
-                # Stop the player if it's already playing
-                if not continue_:
-                    if self.player_thread.status in (
-                        STATUS.PLAYING,
-                        STATUS.PAUSED,
-                    ):
-                        self.stop(False)
+            model = current_tab.model()
 
-                    self.play_file_thread(song)
+            song = self.song_from_index(model.index(row, 0))
+
+            if song:
+                # self.playManager.play(song)
+                backend_name = self.find_player(song.song_file.filename)
+
+                # Set timeline and duration
+                self.timeline.setMaximum(int(song.song_file.duration * 100))
+                self.time_total.setText(
+                    str(datetime.timedelta(seconds=song.song_file.duration)).split(".")[
+                        0
+                    ]
+                )
+                # self.playManager.player_thread.current_seconds_update.connect(
+                #     self.timeline_update_seconds
+                # )
+
+                self.audio_backend = AudioBackendPyAudio(44100, 8192)
+
+                if self.player_backend is not None:
+                    self.player_thread = PlayerThread(
+                        self.player_backend, self.audio_backend
+                    )
+                    self.player_thread.song_finished.connect(self.next_clicked)
+                    self.player_thread.position_changed.connect(
+                        self.timeline_update_seconds
+                    )
+                    self.player_thread.start()
+
+                # Show notification
+                self.show_song_notification(song)
+
+                logger.info(f"{self.log_prefix}Now playing {song.song_file.filename}")
+                self.current_row = row
+
+                # Update UI
+                self.tray.setToolTip(f"Playing {song.song_file.filename}")
+
+                if isinstance(model, PlaylistModel):
+                    #         if not continue_:
+                    #             self.play_file_thread(song)
                     current_tab.current_row = row
 
                     # Select playing track
@@ -834,63 +906,62 @@ class MainWindow(QtWidgets.QMainWindow):
                         | QItemSelectionModel.SelectionFlag.Rows,
                     )
 
-                    # bytes = 0
+                self.set_play_status(row, True)
 
-                    # if hasattr(song, 'subsong'):
-                    #     bytes = song.subsong.bytes
-                    # else:
-                    #     bytes = song.song_file.modulebytes
+                #             # bytes = 0
 
-                    # Set timeline and duration
-                    self.timeline.setMaximum(int(song.song_file.duration * 100))
-                    self.time_total.setText(
-                        str(datetime.timedelta(seconds=song.song_file.duration)).split(
-                            "."
-                        )[0]
-                    )
+                #             # if hasattr(song, 'subsong'):
+                #             #     bytes = song.subsong.bytes
+                #             # else:
+                #             #     bytes = song.song_file.modulebytes
 
-                    # Set current song (for pausing)
-                    # self.current_selection.setCurrentIndex(current_tab.model().index(current_tab.current_row, 0), QItemSelectionModel.SelectCurrent)
-                    self.player_thread.current_song = song
+                #             # Set current song (for pausing)
+                #             # self.current_selection.setCurrentIndex(current_tab.model().index(current_tab.current_row, 0), QItemSelectionModel.SelectCurrent)
+                #             self.player_thread.current_song = song
 
-                    # Show notification
-                    self.show_song_notification(song)
+                #     else:
+                #         pass
 
-                    log(LOG_TYPE.INFO, f"Now playing {song.song_file.filename}")
-                    self.current_row = row
+                #     self.play_action.setIcon(QIcon(os.path.join(path, "pause.png")))
+                #     self.load_action.setEnabled(False)
+                #     self.setWindowTitle(
+                #         f"pyuade - {song.song_file.modulename} - {song.song_file.filename}"
+                #     )
 
-                    # Update UI
-                    self.tray.setToolTip(f"Playing {song.song_file.filename}")
-            else:
-                pass
+        #     self.player_thread.status = STATUS.PLAYING
 
-            self.play_action.setIcon(QIcon(os.path.join(path, "pause.png")))
-            self.load_action.setEnabled(False)
-            self.setWindowTitle(
-                f"pyuade - {song.song_file.modulename} - {song.song_file.filename}"
-            )
+    # @QtCore.Slot()
+    # def paused(self) -> None:
+    #     self.play_action.setIcon(self.icons["pause"])
 
-            self.set_play_status(row, True)
-            self.player_thread.status = STATUS.PLAYING
+    def stop(self) -> None:
+        if self.player_thread:
+            logger.debug("Stopping player thread")
+            self.player_thread.stop()
+            if not self.player_thread.wait(5000):
+                self.player_thread.terminate()
+                self.player_thread.wait()
 
-    def play_file_thread(self, song: Song) -> None:
-        self.player_thread.current_song = song
-        self.player_thread.status = STATUS.PLAYING
-        self.player_thread.start()
+            if self.player_backend:
+                self.player_backend.free_module()
+            self.audio_backend = None
 
-    def stop(self, pause_thread: bool) -> None:
-        if pause_thread:
-            self.player_thread.status = STATUS.PAUSED
-        else:
-            self.player_thread.status = STATUS.STOPPED
-            self.timeline.setSliderPosition(0)
-            self.time.setText("00:00")
-            self.time_total.setText("00:00")
-            self.setWindowTitle("pyuade")
+            # self.play_button.setIcon(
+            #     self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPlay)
+            # )
+            # self.stop_button.setEnabled(False)
+            # self.progress_slider.setEnabled(False)
+            logger.debug("Player thread stopped")
+        self.reset_gui()
 
-        self.player_thread.quit()
-        self.player_thread.wait()
-        self.play_action.setIcon(QIcon(os.path.join(path, "play.png")))
+    @QtCore.Slot()
+    def reset_gui(self) -> None:
+        self.timeline.setSliderPosition(0)
+        self.time.setText("00:00")
+        self.time_total.setText("00:00")
+        self.setWindowTitle(self.appname)
+
+        self.play_action.setIcon(self.icons["play"])
         self.load_action.setEnabled(True)
 
         # index = self.current_selection.currentIndex()
@@ -902,28 +973,40 @@ class MainWindow(QtWidgets.QMainWindow):
         if current_tab:
             self.set_play_status(current_tab.current_row, False)
 
-    def play_next_item(self) -> None:
-        row = self.current_row
-
+    @QtCore.Slot()
+    def play_pause_clicked(self):
         current_tab = self.get_current_tab()
         if current_tab:
-            # current_index actually lists all columns, so for now just take the first col
-            if row < current_tab.model().rowCount(current_tab.rootIndex()) - 1:
-                self.set_play_status(row, False)
-                self.play(row + 1, False)
+            if current_tab.model().rowCount(current_tab.rootIndex()) > 0:
+                self.play_at_index(current_tab.current_row)
 
-    def play_previous_item(self) -> None:
-        if self.current_selection:
-            index = self.current_selection.currentIndex()
+    @QtCore.Slot()
+    def stop_clicked(self):
+        self.stop()
 
-            row = index.row()
+    @QtCore.Slot()
+    def prev_clicked(self):
+        self.play_next_previous_item(False)
 
+    @QtCore.Slot()
+    def next_clicked(self):
+        self.play_next_previous_item(True)
+
+    def play_next_previous_item(self, next: bool) -> None:
+        self.stop()
         current_tab = self.get_current_tab()
         if current_tab:
-            # current_index actually lists all columns, so for now just take the first col
-            if current_tab.current_row > 0:
-                self.set_play_status(row, False)
-                self.play(row - 1, False)
+            if current_tab.model().rowCount(current_tab.rootIndex()) > 0:
+                row = current_tab.current_row
+
+                if next:
+                    if row < current_tab.model().rowCount(current_tab.rootIndex()) - 1:
+                        self.set_play_status(row, False)
+                        self.play_at_index(row + 1)
+                else:
+                    if row > 0:
+                        self.set_play_status(row, False)
+                        self.play_at_index(row - 1)
 
     # @ QtCore.Slot()
     # def timeline_update(self, bytes: int) -> None:
@@ -935,11 +1018,10 @@ class MainWindow(QtWidgets.QMainWindow):
     #             seconds=bytes/176400)).split(".")[0])
 
     @QtCore.Slot()
-    def timeline_update_seconds(self, seconds: float) -> None:
-        if self.player_thread.status == STATUS.PLAYING:
-            if self.timeline_tracking:
-                self.timeline.setValue(int(seconds * 100))
-
+    def timeline_update_seconds(self, milliseconds: float) -> None:
+        if self.timeline_tracking:
+            seconds = milliseconds / 1000
+            self.timeline.setValue(int(milliseconds / 10))
             self.time.setText(str(datetime.timedelta(seconds=seconds)).split(".")[0])
 
     @QtCore.Slot()
@@ -958,37 +1040,39 @@ class MainWindow(QtWidgets.QMainWindow):
 
     @QtCore.Slot()
     def load_folder_clicked(self):
-        if self.player_thread.status != STATUS.PLAYING:
-            last_open_path = self.config.get("files", "last_open_path", fallback=".")
-            dir = QFileDialog.getExistingDirectory(
-                self,
-                "Open music folder",
-                last_open_path,
-                QFileDialog.Option.ShowDirsOnly,
-            )
-            if dir:
-                self.scan_and_load_folder(dir)
-                self.config.set("files", "last_open_path", os.path.abspath(dir))
+        # if self.player_thread.status != STATUS.PLAYING:
+        #     last_open_path = self.config.get("files", "last_open_path", fallback=".")
+        #     dir = QFileDialog.getExistingDirectory(
+        #         self,
+        #         "Open music folder",
+        #         last_open_path,
+        #         QFileDialog.Option.ShowDirsOnly,
+        #     )
+        #     if dir:
+        #         self.scan_and_load_folder(dir)
+        #         self.config.set("files", "last_open_path", os.path.abspath(dir))
+        pass
 
     @QtCore.Slot()
     def load_clicked(self):
-        if not self.player_thread.status == STATUS.PLAYING:
-            if self.config.has_option("files", "last_open_path"):
-                last_open_path = self.config["files"]["last_open_path"]
+        # if not self.player_thread.status == STATUS.PLAYING:
+        #     if self.config.has_option("files", "last_open_path"):
+        #         last_open_path = self.config["files"]["last_open_path"]
 
-                filenames, filter = QFileDialog.getOpenFileNames(
-                    self, caption="Load music file", dir=last_open_path
-                )
-            else:
-                filenames, filter = QFileDialog.getOpenFileNames(
-                    self, caption="Load music file"
-                )
+        #         filenames, filter = QFileDialog.getOpenFileNames(
+        #             self, caption="Load music file", dir=last_open_path
+        #         )
+        #     else:
+        #         filenames, filter = QFileDialog.getOpenFileNames(
+        #             self, caption="Load music file"
+        #         )
 
-            if filenames:
-                if self.scan_and_load_files(filenames):
-                    self.config["files"]["last_open_path"] = os.path.dirname(
-                        os.path.abspath(filenames[0])
-                    )
+        #     if filenames:
+        #         if self.scan_and_load_files(filenames):
+        #             self.config["files"]["last_open_path"] = os.path.dirname(
+        #                 os.path.abspath(filenames[0])
+        #             )
+        pass
 
     @QtCore.Slot()
     def save_clicked(self):
@@ -1009,44 +1093,6 @@ class MainWindow(QtWidgets.QMainWindow):
 
             #     if songs:
             #         playlist.write(str(jsonpickle.encode(songs)))
-
-    @QtCore.Slot()
-    def play_clicked(self):
-        current_tab = self.get_current_tab()
-        if current_tab:
-            if current_tab.model().rowCount(current_tab.rootIndex()) > 0:
-                match self.player_thread.status:
-                    case STATUS.PLAYING:
-                        # Play -> pause
-                        self.stop(True)
-                    case STATUS.PAUSED:
-                        # Pause -> play
-                        self.play(current_tab.current_row)
-                        # uade.seek_seconds(self.timeline.sliderPosition() / 100)
-                        self.play_action.setIcon(QIcon(path + "/pause.png"))
-                    case STATUS.STOPPED:
-                        self.play(current_tab.current_row, False)
-
-    @QtCore.Slot()
-    def stop_clicked(self):
-        self.stop(False)
-
-    @QtCore.Slot()
-    def prev_clicked(self):
-        self.play_previous_item()
-
-    @QtCore.Slot()
-    def next_clicked(self):
-        self.play_next_item()
-
-    @QtCore.Slot()
-    def item_finished(self):
-        log(
-            LOG_TYPE.INFO,
-            f"End of {self.player_thread.current_song.song_file.filename} reached",
-        )
-        self.stop(False)
-        self.play_next_item()
 
     def enable_ui(self, enable: bool) -> None:
         self.play_action.setEnabled(enable)
