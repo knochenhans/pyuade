@@ -78,7 +78,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.loader_thread = LoaderThread(self)
         self.loader_thread.finished.connect(self.loader_finished)
 
-        self.read_config()
+        self.config_manager = configmanager.ConfigManager(self.appname, self.appauthor)
+        self.config_manager.read_config(self)
 
         self.player_backends = {
             "LibUADE": PlayerBackendLibUADE,
@@ -128,103 +129,6 @@ class MainWindow(QtWidgets.QMainWindow):
                 raise Exception("Playlist file is empty.")
         except FileNotFoundError as e:
             raise Exception(f"Error while reading playlist file: {str(e)}")
-
-    def read_config(self) -> None:
-        self.config["window"] = {}
-        self.config["files"] = {}
-
-        self.config.read(os.path.join(user_config_dir(self.appname), "config.ini"))
-        window_config = self.config["window"]
-        files_config = self.config["files"]
-
-        self.resize(
-            int(window_config.get("width", "800")),
-            int(window_config.get("height", "600")),
-        )
-
-        # Load playlist from files add as tabs
-        # TODO: do this using md5 of song files?
-
-        playlist_filenames = glob.glob(
-            os.path.join(user_config_dir(self.appname), "playlist-*.json")
-        )
-        playlist_filenames.sort()
-
-        if len(playlist_filenames) > 0:
-            for playlist_filename in playlist_filenames:
-                try:
-                    self.load_playlist_as_tab(playlist_filename)
-                except Exception as e:
-                    logger.error(
-                        f"{self.log_prefix}Error while loading playlist {playlist_filename}: {e}"
-                    )
-                    self.add_tab("Default")
-        else:
-            self.add_tab("Default")
-
-        current_tab_index = int(files_config.get("current_tab", "0"))
-        current_item_row = int(files_config.get("current_item", "0"))
-
-        if current_tab_index >= 0:
-            self.playlist_tabs.setCurrentIndex(current_tab_index)
-
-            # Set all columns widths to config values for all tabs
-            for t in range(0, self.playlist_tabs.count()):
-                current_tab = self.playlist_tabs.widget(t)
-                if isinstance(current_tab, PlaylistTreeView):
-                    for c in range(current_tab.model().columnCount()):
-                        config_value = window_config.get(f"col{str(c)}_width")
-
-                        if config_value:
-                            if config_value.isnumeric():
-                                current_tab.header().resizeSection(c, int(config_value))
-
-            self.select_item(current_item_row, True)
-
-    def write_config(self) -> None:
-        window_config = self.config["window"]
-        files_config = self.config["files"]
-
-        window_config = self.config["window"]
-        files_config = self.config["files"]
-
-        window_config["width"] = str(self.geometry().width())
-        window_config["height"] = str(self.geometry().height())
-
-        user_config_path = Path(user_config_dir(self.appname))
-        if not user_config_path.exists():
-            user_config_path.mkdir(parents=True)
-
-        current_tab = self.get_current_tab()
-        if current_tab:
-            if current_tab.current_row >= 0:
-                # Save current tab and row
-                files_config["current_tab"] = str(self.playlist_tabs.currentIndex())
-                files_config["current_item"] = str(current_tab.current_row)
-
-            # Column width
-            for c in range(current_tab.model().columnCount()):
-                window_config[f"col{str(c)}_width"] = str(current_tab.columnWidth(c))
-
-        with open(
-            os.path.join(user_config_dir(self.appname), "config.ini"), "w"
-        ) as config_file:
-            self.config.write(config_file)
-
-        # Write playlists (referencing song files)
-        # TODO: do this using md5 of song files?
-
-        # Delete existing playlist files
-        existing_playlists = glob.glob(
-            os.path.join(user_config_dir(self.appname), "playlist-*.json")
-        )
-
-        for playlist in existing_playlists:
-            os.remove(playlist)
-
-        # Write all tabs as playlists
-        for t in range(0, self.playlist_tabs.count()):
-            self.write_playlist_file(t)
 
     def playlist_from_tab(self, tab_nr: int) -> PlaylistExport:
         songs: list[Song] = []
@@ -607,7 +511,7 @@ class MainWindow(QtWidgets.QMainWindow):
         return True
 
     def closeEvent(self, event: QEvent):
-        self.write_config()
+        self.config_manager.write_config(self)
 
     def get_current_tab(self) -> Optional[PlaylistTreeView]:
         # return self.playlist_tabs.widget(self.playlist_tabs.tabBar().currentIndex())
