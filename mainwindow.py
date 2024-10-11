@@ -557,10 +557,6 @@ class MainWindow(QtWidgets.QMainWindow):
 
     @QtCore.Slot()
     def show_song_info(self) -> None:
-        uade_song_info(
-            "/home/andre/Musik/Retro/Necros/orbital delusions.mod",
-            UadeSongInfoType.UADE_MODULE_INFO,
-        )
         current_tab = self.get_current_tab()
         if current_tab:
             index = current_tab.selectionModel().selectedRows(0)[0]
