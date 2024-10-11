@@ -1,6 +1,5 @@
 import configparser
 import datetime
-import glob
 import ntpath
 import os
 import resource
@@ -15,40 +14,26 @@ from loguru import logger
 from pynotifier import Notification, NotificationClient
 from pynotifier.backends import platform
 from PySide6 import QtCore, QtWidgets
-from PySide6.QtCore import (
-    QCoreApplication,
-    QEvent,
-    QItemSelectionModel,
-    QModelIndex,
-    QSize,
-    Qt,
-)
+from PySide6.QtCore import (QCoreApplication, QEvent, QItemSelectionModel,
+                            QModelIndex, QSize, Qt)
 from PySide6.QtGui import QAction, QIcon, QKeyEvent, QKeySequence
-from PySide6.QtWidgets import (
-    QLabel,
-    QMenu,
-    QSlider,
-    QStatusBar,
-    QSystemTrayIcon,
-    QToolBar,
-)
+from PySide6.QtWidgets import (QLabel, QMenu, QSlider, QStatusBar,
+                               QSystemTrayIcon, QToolBar)
 
+import configmanager
 # from ctypes_functions import *
 from audio_backends.pyaudio.audio_backend_pyuadio import AudioBackendPyAudio
 from loader_thread import LoaderThread
 from options import Options
-from player_backends.libopenmpt.player_backend_libopenmpt import PlayerBackendLibOpenMPT
+from player_backends.libopenmpt.player_backend_libopenmpt import \
+    PlayerBackendLibOpenMPT
+from player_backends.libuade.ctypes_classes import uade_song_info
 from player_backends.libuade.player_backend_libuade import PlayerBackendLibUADE
-from player_backends.libuade.songinfo import UadeSongInfoType, uade_song_info
+from player_backends.libuade.songinfo import UadeSongInfoType
 from player_backends.player_backend import PlayerBackend
 from player_thread import PlayerThread
-from playlist import (
-    PlaylistExport,
-    PlaylistItem,
-    PlaylistModel,
-    PlaylistTab,
-    PlaylistTreeView,
-)
+from playlist import (PlaylistExport, PlaylistItem, PlaylistModel, PlaylistTab,
+                      PlaylistTreeView)
 from scraping import lookup_msm, scrape_modarchive, scrape_modland, scrape_msm
 from song_info_dialog import SongInfoDialog
 from uade import Song, uade

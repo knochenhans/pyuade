@@ -1,10 +1,10 @@
-from ctypes import c_char, c_size_t, c_ubyte, c_void_p, byref
+from ctypes import byref, c_char, c_size_t, c_ubyte, c_void_p
+
 import pyaudio
 from PySide6 import QtCore
 from PySide6.QtCore import QObject, Signal
-from ctypes_functions import libuade
 
-from ctypes_classes import (
+from player_backends.libuade.ctypes_classes import (
     UADE_MAX_MESSAGE_SIZE,
     UADE_NOTIFICATION_TYPE,
     UADE_SEEK_MODE,
@@ -18,6 +18,7 @@ from ctypes_classes import (
     uade_song_info,
     uade_subsong_info,
 )
+from player_backends.libuade.ctypes_functions import libuade
 from utils.log import LOG_TYPE, log
 
 
@@ -82,7 +83,8 @@ class Uade(QObject):
         self.stream = None
 
     def __del__(self):
-        self.pyaudio.terminate()
+        # self.pyaudio.terminate()
+        pass
 
     # Load and scan a song file
 
@@ -335,16 +337,16 @@ class Uade(QObject):
                 # Fatal error
                 libuade.uade_cleanup_state(self.state)
                 raise RuntimeError
-            case 0:
-                # Not playable
-                raise ValueError
-            case 1:
-                self.stream = self.pyaudio.open(
-                    format=self.pyaudio.get_format_from_width(2),
-                    channels=2,
-                    rate=samplerate,
-                    output=True,
-                )
+            # case 0:
+            #     # Not playable
+            #     raise ValueError
+            # case 1:
+            #     self.stream = self.pyaudio.open(
+            #         format=self.pyaudio.get_format_from_width(2),
+            #         channels=2,
+            #         rate=samplerate,
+            #         output=True,
+            #     )
 
     # Check notifications, return False when song end found
 

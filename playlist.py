@@ -3,14 +3,13 @@ from PySide6.QtCore import QRect, Qt
 from PySide6.QtGui import QKeyEvent, QStandardItem, QStandardItemModel
 from PySide6.QtWidgets import QToolButton, QTreeView
 
-from ctypes_functions import *
-from uade import *
 
+class PlaylistExport:
+    """Playlist representation for export as playlist file"""
 
-class PlaylistExport():
-    '''Playlist representation for export as playlist file'''
-
-    def __init__(self, name: str = '', songs=None, current_song=0, current_song_pos=0) -> None:
+    def __init__(
+        self, name: str = "", songs=None, current_song=0, current_song_pos=0
+    ) -> None:
         self.name = name
         self.songs = songs
         self.current_song = current_song
@@ -83,11 +82,11 @@ class PlaylistTabBar(QtWidgets.QTabBar):
 
         # self.tabBarDoubleClicked.connect(self.doubleClicked)
 
-    @ QtCore.Slot()
+    @QtCore.Slot()
     def rename(self, text) -> None:
         self.edit_text = text
 
-    @ QtCore.Slot()
+    @QtCore.Slot()
     def editing_finished(self) -> None:
         self.setTabText(self.edit_index, self.edit_text)
 
@@ -107,12 +106,14 @@ class PlaylistTab(QtWidgets.QTabWidget):
         # self.tabBarDoubleClicked.connect(self.tabBarDoubleClicked)
 
         self.addtabButton = QToolButton()
-        self.addtabButton.setText(' + ')
+        self.addtabButton.setText(" + ")
         self.setCornerWidget(self.addtabButton, Qt.Corner.TopRightCorner)
 
-    @ QtCore.Slot()
+    @QtCore.Slot()
     def doubleClicked(self, index) -> None:
-        self.tabBar().edit_index = index
+        tab_bar = self.tabBar()
+        if isinstance(tab_bar, PlaylistTabBar):
+            tab_bar.edit_index = index
         edit = PlaylistTabBarEdit(self, self.tabBar().tabRect(index))
         edit.show()
         edit.setFocus()
@@ -135,7 +136,11 @@ class PlaylistModel(QStandardItemModel):
         default_flags = super().flags(index)
 
         if index.isValid():
-            return Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable | Qt.ItemFlag.ItemIsDragEnabled
+            return (
+                Qt.ItemFlag.ItemIsEnabled
+                | Qt.ItemFlag.ItemIsSelectable
+                | Qt.ItemFlag.ItemIsDragEnabled
+            )
 
         return default_flags
 
