@@ -46,7 +46,7 @@ class PlayerThread(QThread):
             self.audio_backend.write(buffer)
 
             # Emit position changed signal
-            current_position: float = self.player_backend.get_position_milliseconds()
+            current_position: float = self.player_backend.get_position_seconds()
             self.position_changed.emit(int(current_position), int(module_length))
 
         self.audio_backend.stop()
