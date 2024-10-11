@@ -34,9 +34,15 @@ from PySide6.QtWidgets import (
     QToolBar,
 )
 
-from ctypes_functions import *
+# from ctypes_functions import *
+from audio_backends.pyaudio.audio_backend_pyuadio import AudioBackendPyAudio
 from loader_thread import LoaderThread
-from player_thread import STATUS, PlayerThread
+from options import Options
+from player_backends.libopenmpt.player_backend_libopenmpt import PlayerBackendLibOpenMPT
+from player_backends.libuade.player_backend_libuade import PlayerBackendLibUADE
+from player_backends.libuade.songinfo import UadeSongInfoType, uade_song_info
+from player_backends.player_backend import PlayerBackend
+from player_thread import PlayerThread
 from playlist import (
     PlaylistExport,
     PlaylistItem,
@@ -48,56 +54,6 @@ from scraping import lookup_msm, scrape_modarchive, scrape_modland, scrape_msm
 from song_info_dialog import SongInfoDialog
 from uade import Song, uade
 from util import TREEVIEWCOL, path
-
-from utils.log import LOG_TYPE, log
-
-
-class OptionsGeneral(QtWidgets.QWidget):
-    def __init__(self, parent, settings: QtCore.QSettings):
-        super().__init__(parent)
-
-        self.settings = settings
-
-        layout = QtWidgets.QVBoxLayout(self)
-        self.setLayout(layout)
-
-        hbox = QtWidgets.QHBoxLayout()
-        layout.addLayout(hbox)
-
-        buffer = self.settings.value("buffer", 8192)
-        self.buffer_edit = QtWidgets.QLineEdit(str(buffer), self)
-        self.buffer_edit.setValidator(QIntValidator(0, 1000000, self))
-
-        label = QtWidgets.QLabel("Buffer:", self)
-        label.setBuddy(self.buffer_edit)
-
-        hbox.addWidget(label)
-        hbox.addWidget(self.buffer_edit)
-        hbox.addStretch()
-
-
-class Options(QtWidgets.QDialog):
-    def __init__(self, parent, settings: QtCore.QSettings):
-        super().__init__(parent)
-
-        self.tab_widget = QtWidgets.QTabWidget()
-
-        self.general = OptionsGeneral(self, settings)
-
-        self.setWindowTitle(self.tr("Options", "dialog_options"))
-
-        self.tab_widget.addTab(self.general, "General")
-        layout = QtWidgets.QVBoxLayout(self)
-        self.setLayout(layout)
-        self.layout().addWidget(self.tab_widget)
-
-        self.buttons = QtWidgets.QDialogButtonBox(
-            QtWidgets.QDialogButtonBox.StandardButton.Ok
-            | QtWidgets.QDialogButtonBox.StandardButton.Cancel
-        )
-        self.buttons.accepted.connect(self.accept)
-        self.buttons.rejected.connect(self.reject)
-        self.layout().addWidget(self.buttons)
 
 
 class MainWindow(QtWidgets.QMainWindow):
