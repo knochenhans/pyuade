@@ -30,8 +30,6 @@ class SubsongData:
 
 
 # Unique reference to the actual module file, filled by data from UADE
-
-
 class SongFile:
     def __init__(self) -> None:
         self.formatname: str = ""
@@ -54,8 +52,6 @@ class SongFile:
 
 
 # Subsong of a song in the playlist
-
-
 class Subsong:
     def __init__(self) -> None:
         self.nr: int = 0
@@ -63,8 +59,6 @@ class Subsong:
 
 
 # Represents a specific subsong of a song as playable in the playlist
-
-
 class Song:
     def __init__(self) -> None:
         self.song_file: SongFile
