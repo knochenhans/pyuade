@@ -1,6 +1,7 @@
 import hashlib
 import re
 from pathlib import Path
+from typing import Optional, Dict
 
 import requests
 from bs4 import BeautifulSoup
@@ -10,7 +11,7 @@ from platformdirs import user_config_dir
 from uade import Song
 
 
-def scrape_modarchive(username: str, song: Song) -> Song | None:
+def scrape_modarchive(username: str, song: Song) -> Optional[Song]:
     license_file = Path(user_config_dir(username)) / "modarchive-api.key"
 
     if not license_file.exists():
@@ -126,9 +127,9 @@ def scrape_modland(song: Song, column: str) -> str:
     return ""
 
 
-def scrape_msm(song: Song) -> dict:
+def scrape_msm(song: Song) -> Dict[str, str]:
     # Lookup in .Mod Sample Master database via sha1 and return data
-    return_data = {}
+    return_data: Dict[str, str] = {}
 
     sha1 = hashlib.sha1()
 
